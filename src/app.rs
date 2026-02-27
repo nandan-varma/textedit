@@ -75,9 +75,9 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                     handle_keyboard_input(editor, event, self.modifiers);
-                    // Update text geometry after buffer modification
-                    if let Err(e) = state.update_text_geometry(editor.buffer()) {
-                        eprintln!("Failed to update text geometry: {}", e);
+                    // Update geometry (text and cursor) after buffer modification
+                    if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+                        eprintln!("Failed to update geometry: {}", e);
                     }
                 }
             }

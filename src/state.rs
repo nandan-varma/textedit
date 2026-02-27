@@ -4,7 +4,8 @@ use wgpu::{Device, Queue, Surface, SurfaceConfiguration, RenderPipeline, BindGro
 use wgpu::util::DeviceExt;
 use crate::renderer::glyph_cache::GlyphAtlas;
 use crate::renderer::text_geometry::TextGeometry;
-use crate::editor::Buffer;
+use crate::renderer::cursor::CursorGeometry;
+use crate::editor::{Buffer, Cursor};
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
 const FONT_SIZE: f32 = 16.0;
@@ -15,13 +16,17 @@ pub struct State {
     pub queue: Queue,
     config: SurfaceConfiguration,
     window: Arc<Window>,
-    render_pipeline: Option<RenderPipeline>,
+    text_pipeline: Option<RenderPipeline>,
+    cursor_pipeline: Option<RenderPipeline>,
     glyph_atlas: Option<GlyphAtlas>,
     atlas_texture: Option<wgpu::Texture>,
     atlas_bind_group: Option<BindGroup>,
-    vertex_buffer: Option<wgpu::Buffer>,
-    index_buffer: Option<wgpu::Buffer>,
-    index_count: u32,
+    text_vertex_buffer: Option<wgpu::Buffer>,
+    text_index_buffer: Option<wgpu::Buffer>,
+    text_index_count: u32,
+    cursor_vertex_buffer: Option<wgpu::Buffer>,
+    cursor_index_buffer: Option<wgpu::Buffer>,
+    cursor_index_count: u32,
 }
 
 impl State {
@@ -170,7 +175,8 @@ impl State {
         });
 
         // Create render pipeline
-        let render_pipeline = Self::create_render_pipeline(&device, config.format, &bind_group_layout);
+        let text_pipeline = Self::create_text_pipeline(&device, config.format, &bind_group_layout);
+        let cursor_pipeline = Self::create_cursor_pipeline(&device, config.format);
 
         Ok(Self {
             surface,
@@ -178,13 +184,17 @@ impl State {
             queue,
             config,
             window,
-            render_pipeline: Some(render_pipeline),
+            text_pipeline: Some(text_pipeline),
+            cursor_pipeline: Some(cursor_pipeline),
             glyph_atlas: Some(glyph_atlas),
             atlas_texture: Some(atlas_texture),
             atlas_bind_group: Some(atlas_bind_group),
-            vertex_buffer: None,
-            index_buffer: None,
-            index_count: 0,
+            text_vertex_buffer: None,
+            text_index_buffer: None,
+            text_index_count: 0,
+            cursor_vertex_buffer: None,
+            cursor_index_buffer: None,
+            cursor_index_count: 0,
         })
     }
 
@@ -210,7 +220,7 @@ impl State {
         }
     }
 
-    fn create_render_pipeline(
+    fn create_text_pipeline(
         device: &Device,
         format: wgpu::TextureFormat,
         bind_group_layout: &wgpu::BindGroupLayout,
@@ -271,11 +281,72 @@ impl State {
         })
     }
 
-    pub fn update_text_geometry(&mut self, buffer: &Buffer) -> anyhow::Result<()> {
+    fn create_cursor_pipeline(
+        device: &Device,
+        format: wgpu::TextureFormat,
+    ) -> RenderPipeline {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("cursor shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("renderer/cursor.wgsl"))),
+        });
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("cursor pipeline layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4];
+        let vertex_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<crate::renderer::cursor::CursorVertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &vertex_attrs,
+        };
+
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("cursor pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[vertex_layout],
+                compilation_options: Default::default(),
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            multiview: None,
+        })
+    }
+
+    pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor) -> anyhow::Result<()> {
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
             let size = self.window.inner_size();
             
-            let geometry = TextGeometry::build_from_buffer(
+            // Update text geometry
+            let text_geometry = TextGeometry::build_from_buffer(
                 buffer,
                 glyph_atlas,
                 FONT_SIZE,
@@ -284,23 +355,54 @@ impl State {
             )
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            // Update vertex buffer
-            let vertex_data = bytemuck::cast_slice(&geometry.vertices);
-            self.vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            // Update text vertex buffer
+            let vertex_data = bytemuck::cast_slice(&text_geometry.vertices);
+            self.text_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("text vertex buffer"),
                 contents: vertex_data,
                 usage: wgpu::BufferUsages::VERTEX,
             }));
 
-            // Update index buffer
-            let index_data = bytemuck::cast_slice(&geometry.indices);
-            self.index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            // Update text index buffer
+            let index_data = bytemuck::cast_slice(&text_geometry.indices);
+            self.text_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("text index buffer"),
                 contents: index_data,
                 usage: wgpu::BufferUsages::INDEX,
             }));
 
-            self.index_count = geometry.indices.len() as u32;
+            self.text_index_count = text_geometry.indices.len() as u32;
+
+            // Update cursor geometry
+            let char_width = FONT_SIZE * 0.6;
+            let line_height = FONT_SIZE * 1.2;
+            let cursor_geometry = CursorGeometry::build_from_cursor(
+                cursor,
+                FONT_SIZE,
+                size.width as f32,
+                size.height as f32,
+                char_width,
+                line_height,
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // Update cursor vertex buffer
+            let cursor_vertex_data = bytemuck::cast_slice(&cursor_geometry.vertices);
+            self.cursor_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("cursor vertex buffer"),
+                contents: cursor_vertex_data,
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+
+            // Update cursor index buffer
+            let cursor_index_data = bytemuck::cast_slice(&cursor_geometry.indices);
+            self.cursor_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("cursor index buffer"),
+                contents: cursor_index_data,
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+
+            self.cursor_index_count = cursor_geometry.indices.len() as u32;
 
             // Update atlas texture if needed
             if let Some(atlas_texture) = &self.atlas_texture {
@@ -366,17 +468,29 @@ impl State {
                 occlusion_query_set: None,
             });
 
-            if let Some(pipeline) = &self.render_pipeline {
+            // Render text
+            if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
 
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
 
-                if let (Some(vb), Some(ib)) = (&self.vertex_buffer, &self.index_buffer) {
+                if let (Some(vb), Some(ib)) = (&self.text_vertex_buffer, &self.text_index_buffer) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..self.index_count, 0, 0..1);
+                    render_pass.draw_indexed(0..self.text_index_count, 0, 0..1);
+                }
+            }
+
+            // Render cursor
+            if let Some(pipeline) = &self.cursor_pipeline {
+                render_pass.set_pipeline(pipeline);
+
+                if let (Some(vb), Some(ib)) = (&self.cursor_vertex_buffer, &self.cursor_index_buffer) {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
                 }
             }
         }
