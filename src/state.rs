@@ -6,6 +6,7 @@ use crate::renderer::glyph_cache::GlyphAtlas;
 use crate::renderer::text_geometry::TextGeometry;
 use crate::renderer::cursor::CursorGeometry;
 use crate::renderer::line_numbers::LineNumbersGeometry;
+use crate::renderer::status_bar::StatusBarGeometry;
 use crate::editor::{Buffer, Cursor};
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
@@ -31,6 +32,9 @@ pub struct State {
     line_numbers_vertex_buffer: Option<wgpu::Buffer>,
     line_numbers_index_buffer: Option<wgpu::Buffer>,
     line_numbers_index_count: u32,
+    status_bar_vertex_buffer: Option<wgpu::Buffer>,
+    status_bar_index_buffer: Option<wgpu::Buffer>,
+    status_bar_index_count: u32,
 }
 
 impl State {
@@ -202,6 +206,9 @@ impl State {
             line_numbers_vertex_buffer: None,
             line_numbers_index_buffer: None,
             line_numbers_index_count: 0,
+            status_bar_vertex_buffer: None,
+            status_bar_index_buffer: None,
+            status_bar_index_count: 0,
         })
     }
 
@@ -440,6 +447,34 @@ impl State {
 
             self.line_numbers_index_count = line_nums_geometry.indices.len() as u32;
 
+            // Update status bar geometry
+            let status_bar_geometry = StatusBarGeometry::build(
+                cursor,
+                glyph_atlas,
+                FONT_SIZE,
+                size.width as f32,
+                size.height as f32,
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // Update status bar vertex buffer
+            let status_bar_vertex_data = bytemuck::cast_slice(&status_bar_geometry.vertices);
+            self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("status bar vertex buffer"),
+                contents: status_bar_vertex_data,
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+
+            // Update status bar index buffer
+            let status_bar_index_data = bytemuck::cast_slice(&status_bar_geometry.indices);
+            self.status_bar_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("status bar index buffer"),
+                contents: status_bar_index_data,
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+
+            self.status_bar_index_count = status_bar_geometry.indices.len() as u32;
+
             // Update atlas texture if needed
             if let Some(atlas_texture) = &self.atlas_texture {
                 self.queue.write_texture(
@@ -542,6 +577,21 @@ impl State {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.line_numbers_index_count, 0, 0..1);
+                }
+            }
+
+            // Render status bar
+            if let Some(pipeline) = &self.text_pipeline {
+                render_pass.set_pipeline(pipeline);
+
+                if let Some(bind_group) = &self.atlas_bind_group {
+                    render_pass.set_bind_group(0, bind_group, &[]);
+                }
+
+                if let (Some(vb), Some(ib)) = (&self.status_bar_vertex_buffer, &self.status_bar_index_buffer) {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.status_bar_index_count, 0, 0..1);
                 }
             }
         }
