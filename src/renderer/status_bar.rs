@@ -1,6 +1,7 @@
-use crate::editor::Cursor;
-use crate::renderer::glyph_cache::GlyphAtlas;
-use crate::renderer::text_geometry::TextVertex;
+use super::glyph_cache::GlyphAtlas;
+use super::layout::{EditorLayout, STATUS_BAR_PADDING};
+use super::text_geometry::TextVertex;
+use crate::editor::{Buffer, Cursor};
 
 pub struct StatusBarGeometry {
     pub vertices: Vec<TextVertex>,
@@ -15,72 +16,79 @@ impl StatusBarGeometry {
         }
     }
 
-    /// Build geometry for rendering status bar showing line and column info
+    /// Build geometry for rendering status bar text
     pub fn build(
         cursor: &Cursor,
+        buffer: &Buffer,
         glyph_atlas: &mut GlyphAtlas,
-        font_size: f32,
-        viewport_width: f32,
-        viewport_height: f32,
+        layout: &EditorLayout,
     ) -> Result<Self, String> {
         let mut geometry = StatusBarGeometry::new();
 
-        let char_width = font_size * 0.6;
-        let line_height = font_size * 1.2;
+        // Get cursor line and column
+        let (line, col) = buffer.char_to_line_col(cursor.position());
+        let total_lines = buffer.len_lines();
 
-        // Status bar at the bottom
-        let status_text = format!("Line {}, Col {}", cursor.position(), 0); // TODO: Calculate actual line/column
+        // Status bar text: "Ln X, Col Y | UTF-8 | Lines: N"
+        let status_text = format!(
+            "Ln {}, Col {}  |  UTF-8  |  {} lines",
+            line + 1,
+            col + 1,
+            total_lines
+        );
 
-        // Position status bar at bottom-left with padding
-        let padding = char_width * 0.5;
-        let y_pos = viewport_height - line_height * 1.5; // Above bottom
+        // Position in status bar (vertically centered)
+        let base_x = layout.status_bar.x + STATUS_BAR_PADDING;
+        let base_y = layout.status_bar.y + (layout.status_bar.height - layout.font_size) * 0.5;
 
-        let x_ndc = -1.0 + (padding / viewport_width) * 2.0;
-        let y_ndc = 1.0 - (y_pos / viewport_height) * 2.0;
+        let mut x_offset = 0.0;
 
-        let mut x_pos = x_ndc;
         for ch in status_text.chars() {
             let entry = match glyph_atlas.get_or_rasterize(ch) {
-                Ok(e) => e,
+                Ok(e) => e.clone(),
                 Err(_) => {
-                    x_pos += char_width / viewport_width * 2.0;
+                    x_offset += layout.char_width;
                     continue;
                 }
             };
 
-            let metrics = &entry.metrics;
-
             if entry.width == 0 || entry.height == 0 {
-                x_pos += metrics.advance_width / viewport_width * 2.0;
+                x_offset += entry.metrics.advance_width;
                 continue;
             }
 
-            let width_ndc = (entry.width as f32 / viewport_width) * 2.0;
-            let height_ndc = (entry.height as f32 / viewport_height) * 2.0;
+            // Calculate pixel position
+            let glyph_x = base_x + x_offset;
+            let glyph_y = base_y + (layout.font_size - entry.height as f32) * 0.5;
+
+            // Convert to NDC
+            let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);
+            let [x2, y2] =
+                layout.pixel_to_ndc(glyph_x + entry.width as f32, glyph_y + entry.height as f32);
 
             let vertex_start = geometry.vertices.len() as u32;
 
             // Top-left
             geometry.vertices.push(TextVertex {
-                position: [x_pos, y_ndc],
+                position: [x1, y1],
                 uv: [entry.uv_min_x, entry.uv_min_y],
             });
 
             // Top-right
             geometry.vertices.push(TextVertex {
-                position: [x_pos + width_ndc, y_ndc],
+                position: [x2, y1],
                 uv: [entry.uv_max_x, entry.uv_min_y],
             });
 
             // Bottom-right
             geometry.vertices.push(TextVertex {
-                position: [x_pos + width_ndc, y_ndc - height_ndc],
+                position: [x2, y2],
                 uv: [entry.uv_max_x, entry.uv_max_y],
             });
 
             // Bottom-left
             geometry.vertices.push(TextVertex {
-                position: [x_pos, y_ndc - height_ndc],
+                position: [x1, y2],
                 uv: [entry.uv_min_x, entry.uv_max_y],
             });
 
@@ -93,7 +101,7 @@ impl StatusBarGeometry {
             geometry.indices.push(vertex_start + 2);
             geometry.indices.push(vertex_start + 3);
 
-            x_pos += metrics.advance_width / viewport_width * 2.0;
+            x_offset += entry.metrics.advance_width;
         }
 
         Ok(geometry)

@@ -1,4 +1,5 @@
-use crate::editor::Cursor;
+use super::layout::{Colors, EditorLayout, TEXT_AREA_PADDING_LEFT, TEXT_AREA_PADDING_TOP};
+use crate::editor::{Buffer, Cursor};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -20,67 +21,60 @@ impl CursorGeometry {
         }
     }
 
-    /// Build geometry for rendering cursor
-    pub fn build_from_cursor(
-        cursor: &Cursor,
-        font_size: f32,
-        viewport_width: f32,
-        viewport_height: f32,
-        char_width: f32,
-        line_height: f32,
-    ) -> Result<Self, String> {
+    /// Build geometry for rendering cursor at correct position
+    pub fn build(cursor: &Cursor, buffer: &Buffer, layout: &EditorLayout) -> Self {
         let mut geometry = CursorGeometry::new();
 
-        let cursor_pos = cursor.position();
+        // Get line and column from cursor position
+        let (line, col) = buffer.char_to_line_col(cursor.position());
 
-        // For now, just render a simple blinking cursor at (0, 0)
-        // In the future, we'll track the actual cursor position based on buffer content
-        let x_ndc = 0.0;
-        let y_ndc = 0.95;
+        // Calculate pixel position
+        let x = layout.text_area.x + TEXT_AREA_PADDING_LEFT + (col as f32 * layout.char_width);
+        let y = TEXT_AREA_PADDING_TOP + (line as f32 * layout.line_height);
 
-        let cursor_width = char_width * 0.1;
-        let cursor_height = line_height * 0.8;
+        // Cursor is a thin vertical bar
+        let cursor_width = 2.0;
+        let cursor_height = layout.line_height;
 
-        let width_ndc = (cursor_width / viewport_width) * 2.0;
-        let height_ndc = (cursor_height / viewport_height) * 2.0;
+        // Convert to NDC
+        let [x1, y1] = layout.pixel_to_ndc(x, y);
+        let [x2, y2] = layout.pixel_to_ndc(x + cursor_width, y + cursor_height);
 
-        let cursor_color = [0.95, 0.95, 0.95, 0.8]; // Light gray, semi-transparent
-
-        let vertex_start = geometry.vertices.len() as u32;
+        let color = Colors::CURSOR_COLOR;
 
         // Top-left
         geometry.vertices.push(CursorVertex {
-            position: [x_ndc, y_ndc],
-            color: cursor_color,
+            position: [x1, y1],
+            color,
         });
 
         // Top-right
         geometry.vertices.push(CursorVertex {
-            position: [x_ndc + width_ndc, y_ndc],
-            color: cursor_color,
+            position: [x2, y1],
+            color,
         });
 
         // Bottom-right
         geometry.vertices.push(CursorVertex {
-            position: [x_ndc + width_ndc, y_ndc - height_ndc],
-            color: cursor_color,
+            position: [x2, y2],
+            color,
         });
 
         // Bottom-left
         geometry.vertices.push(CursorVertex {
-            position: [x_ndc, y_ndc - height_ndc],
-            color: cursor_color,
+            position: [x1, y2],
+            color,
         });
 
-        // Two triangles (CCW winding)
-        geometry.indices.push(vertex_start);
-        geometry.indices.push(vertex_start + 1);
-        geometry.indices.push(vertex_start + 2);
+        // Two triangles
+        geometry.indices.push(0);
+        geometry.indices.push(1);
+        geometry.indices.push(2);
 
-        geometry.indices.push(vertex_start);
-        geometry.indices.push(vertex_start + 2);
-        geometry.indices.push(vertex_start + 3);
+        geometry.indices.push(0);
+        geometry.indices.push(2);
+        geometry.indices.push(3);
 
-        Ok(geometry)
+        geometry
     }
 }

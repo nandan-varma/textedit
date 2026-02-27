@@ -1,5 +1,6 @@
-use crate::renderer::glyph_cache::GlyphAtlas;
-use crate::renderer::text_geometry::TextVertex;
+use super::glyph_cache::GlyphAtlas;
+use super::layout::{EditorLayout, LINE_NUMBER_PADDING_RIGHT, TEXT_AREA_PADDING_TOP};
+use super::text_geometry::TextVertex;
 
 pub struct LineNumbersGeometry {
     pub vertices: Vec<TextVertex>,
@@ -18,73 +19,69 @@ impl LineNumbersGeometry {
     pub fn build(
         total_lines: usize,
         glyph_atlas: &mut GlyphAtlas,
-        font_size: f32,
-        viewport_width: f32,
-        viewport_height: f32,
+        layout: &EditorLayout,
     ) -> Result<Self, String> {
         let mut geometry = LineNumbersGeometry::new();
 
-        let char_width = font_size * 0.6;
-        let line_height = font_size * 1.2;
+        let visible_lines = layout.visible_lines().min(total_lines.max(1));
+        let max_digits = total_lines.max(1).to_string().len();
 
-        // Line numbers area starts at x = -1.0 (left edge) and takes up space for up to 4 digits + padding
-        let line_nums_width = char_width * 5.0; // 4 digits + 1 padding
-        let line_nums_width_ndc = (line_nums_width / viewport_width) * 2.0;
+        for line_num in 1..=visible_lines {
+            let line_str = format!("{:>width$}", line_num, width = max_digits);
 
-        for line_num in 1..=total_lines {
-            let y_pos = ((line_num - 1) as f32) * line_height;
-            if y_pos > viewport_height {
-                break;
-            }
+            // Calculate position - right-aligned in gutter
+            let text_width: f32 = line_str.len() as f32 * layout.char_width;
+            let base_x = layout.gutter.width - LINE_NUMBER_PADDING_RIGHT - text_width;
+            let base_y = TEXT_AREA_PADDING_TOP + ((line_num - 1) as f32 * layout.line_height);
 
-            // Position line numbers right-aligned in the line numbers area
-            let line_str = line_num.to_string();
-            let num_chars = line_str.len();
-            let x_offset = line_nums_width - (num_chars as f32 * char_width + char_width * 0.5);
+            let mut x_offset = 0.0;
 
-            let x_ndc = -1.0 + (x_offset / viewport_width) * 2.0;
-            let y_ndc = 1.0 - (y_pos / viewport_height) * 2.0;
-
-            let mut x_pos = x_ndc;
             for ch in line_str.chars() {
                 let entry = match glyph_atlas.get_or_rasterize(ch) {
-                    Ok(e) => e,
-                    Err(_) => continue,
+                    Ok(e) => e.clone(),
+                    Err(_) => {
+                        x_offset += layout.char_width;
+                        continue;
+                    }
                 };
 
-                let metrics = &entry.metrics;
-
                 if entry.width == 0 || entry.height == 0 {
-                    x_pos += metrics.advance_width / viewport_width * 2.0;
+                    x_offset += entry.metrics.advance_width;
                     continue;
                 }
 
-                let width_ndc = (entry.width as f32 / viewport_width) * 2.0;
-                let height_ndc = (entry.height as f32 / viewport_height) * 2.0;
+                // Calculate pixel position
+                let glyph_x = base_x + x_offset;
+                let glyph_y = base_y + (layout.line_height - entry.height as f32) * 0.5;
+
+                // Convert to NDC
+                let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);
+                let [x2, y2] = layout
+                    .pixel_to_ndc(glyph_x + entry.width as f32, glyph_y + entry.height as f32);
 
                 let vertex_start = geometry.vertices.len() as u32;
 
                 // Top-left
                 geometry.vertices.push(TextVertex {
-                    position: [x_pos, y_ndc],
+                    position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
                 });
 
                 // Top-right
                 geometry.vertices.push(TextVertex {
-                    position: [x_pos + width_ndc, y_ndc],
+                    position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
                 });
 
                 // Bottom-right
                 geometry.vertices.push(TextVertex {
-                    position: [x_pos + width_ndc, y_ndc - height_ndc],
+                    position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
                 });
 
                 // Bottom-left
                 geometry.vertices.push(TextVertex {
-                    position: [x_pos, y_ndc - height_ndc],
+                    position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
                 });
 
@@ -97,7 +94,7 @@ impl LineNumbersGeometry {
                 geometry.indices.push(vertex_start + 2);
                 geometry.indices.push(vertex_start + 3);
 
-                x_pos += metrics.advance_width / viewport_width * 2.0;
+                x_offset += entry.metrics.advance_width;
             }
         }
 

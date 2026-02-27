@@ -7,10 +7,12 @@ use crate::renderer::text_geometry::TextGeometry;
 use crate::renderer::cursor::CursorGeometry;
 use crate::renderer::line_numbers::LineNumbersGeometry;
 use crate::renderer::status_bar::StatusBarGeometry;
+use crate::renderer::ui_background::UIBackgroundGeometry;
+use crate::renderer::layout::{EditorLayout, Colors};
 use crate::editor::{Buffer, Cursor};
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
-const FONT_SIZE: f32 = 16.0;
+const FONT_SIZE: f32 = 14.0;
 
 pub struct State {
     surface: Surface<'static>,
@@ -18,23 +20,40 @@ pub struct State {
     pub queue: Queue,
     config: SurfaceConfiguration,
     window: Arc<Window>,
+    
+    // Pipelines
     text_pipeline: Option<RenderPipeline>,
-    cursor_pipeline: Option<RenderPipeline>,
+    color_pipeline: Option<RenderPipeline>,
+    
+    // Glyph atlas
     glyph_atlas: Option<GlyphAtlas>,
     atlas_texture: Option<wgpu::Texture>,
     atlas_bind_group: Option<BindGroup>,
+    
+    // UI Background buffers
+    ui_bg_vertex_buffer: Option<wgpu::Buffer>,
+    ui_bg_index_buffer: Option<wgpu::Buffer>,
+    ui_bg_index_count: u32,
+    
+    // Text buffers
     text_vertex_buffer: Option<wgpu::Buffer>,
     text_index_buffer: Option<wgpu::Buffer>,
     text_index_count: u32,
-    cursor_vertex_buffer: Option<wgpu::Buffer>,
-    cursor_index_buffer: Option<wgpu::Buffer>,
-    cursor_index_count: u32,
+    
+    // Line numbers buffers
     line_numbers_vertex_buffer: Option<wgpu::Buffer>,
     line_numbers_index_buffer: Option<wgpu::Buffer>,
     line_numbers_index_count: u32,
+    
+    // Status bar buffers
     status_bar_vertex_buffer: Option<wgpu::Buffer>,
     status_bar_index_buffer: Option<wgpu::Buffer>,
     status_bar_index_count: u32,
+    
+    // Cursor buffers
+    cursor_vertex_buffer: Option<wgpu::Buffer>,
+    cursor_index_buffer: Option<wgpu::Buffer>,
+    cursor_index_count: u32,
 }
 
 impl State {
@@ -129,7 +148,7 @@ impl State {
             },
         );
 
-        // Create render pipeline and bind group layout
+        // Create bind group layout for text rendering
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("text bind group layout"),
             entries: &[
@@ -182,9 +201,9 @@ impl State {
             ],
         });
 
-        // Create render pipeline
+        // Create pipelines
         let text_pipeline = Self::create_text_pipeline(&device, config.format, &bind_group_layout);
-        let cursor_pipeline = Self::create_cursor_pipeline(&device, config.format);
+        let color_pipeline = Self::create_color_pipeline(&device, config.format);
 
         Ok(Self {
             surface,
@@ -193,30 +212,33 @@ impl State {
             config,
             window,
             text_pipeline: Some(text_pipeline),
-            cursor_pipeline: Some(cursor_pipeline),
+            color_pipeline: Some(color_pipeline),
             glyph_atlas: Some(glyph_atlas),
             atlas_texture: Some(atlas_texture),
             atlas_bind_group: Some(atlas_bind_group),
+            ui_bg_vertex_buffer: None,
+            ui_bg_index_buffer: None,
+            ui_bg_index_count: 0,
             text_vertex_buffer: None,
             text_index_buffer: None,
             text_index_count: 0,
-            cursor_vertex_buffer: None,
-            cursor_index_buffer: None,
-            cursor_index_count: 0,
             line_numbers_vertex_buffer: None,
             line_numbers_index_buffer: None,
             line_numbers_index_count: 0,
             status_bar_vertex_buffer: None,
             status_bar_index_buffer: None,
             status_bar_index_count: 0,
+            cursor_vertex_buffer: None,
+            cursor_index_buffer: None,
+            cursor_index_count: 0,
         })
     }
 
     fn load_system_font() -> anyhow::Result<Vec<u8>> {
-        // Try to load system monospace font
         #[cfg(target_os = "macos")]
         {
             std::fs::read("/System/Library/Fonts/SFNSMono.ttf")
+                .or_else(|_| std::fs::read("/System/Library/Fonts/Monaco.dfont"))
                 .or_else(|_| std::fs::read("/System/Library/Fonts/Supplemental/Andale Mono.ttf"))
                 .map_err(|e| anyhow::anyhow!("Failed to load system font: {}", e))
         }
@@ -245,7 +267,7 @@ impl State {
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("render pipeline layout"),
+            label: Some("text pipeline layout"),
             bind_group_layouts: &[bind_group_layout],
             push_constant_ranges: &[],
         });
@@ -258,7 +280,7 @@ impl State {
         };
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("render pipeline"),
+            label: Some("text pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -295,17 +317,17 @@ impl State {
         })
     }
 
-    fn create_cursor_pipeline(
+    fn create_color_pipeline(
         device: &Device,
         format: wgpu::TextureFormat,
     ) -> RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("cursor shader"),
+            label: Some("color shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("renderer/cursor.wgsl"))),
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("cursor pipeline layout"),
+            label: Some("color pipeline layout"),
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
@@ -318,7 +340,7 @@ impl State {
         };
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("cursor pipeline"),
+            label: Some("color pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -356,126 +378,88 @@ impl State {
     }
 
     pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor) -> anyhow::Result<()> {
+        let size = self.window.inner_size();
+        let layout = EditorLayout::new(size.width as f32, size.height as f32, FONT_SIZE);
+
+        // Update UI backgrounds
+        let ui_bg = UIBackgroundGeometry::build(&layout);
+        if !ui_bg.vertices.is_empty() {
+            self.ui_bg_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("ui bg vertex buffer"),
+                contents: bytemuck::cast_slice(&ui_bg.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+            self.ui_bg_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("ui bg index buffer"),
+                contents: bytemuck::cast_slice(&ui_bg.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+            self.ui_bg_index_count = ui_bg.indices.len() as u32;
+        }
+
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
-            let size = self.window.inner_size();
-            
             // Update text geometry
-            let text_geometry = TextGeometry::build_from_buffer(
-                buffer,
-                glyph_atlas,
-                FONT_SIZE,
-                size.width as f32,
-                size.height as f32,
-            )
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let text_geometry = TextGeometry::build_from_buffer(buffer, glyph_atlas, &layout)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            // Update text vertex buffer
-            let vertex_data = bytemuck::cast_slice(&text_geometry.vertices);
-            self.text_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("text vertex buffer"),
-                contents: vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
+            if !text_geometry.vertices.is_empty() {
+                self.text_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("text vertex buffer"),
+                    contents: bytemuck::cast_slice(&text_geometry.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }));
+                self.text_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("text index buffer"),
+                    contents: bytemuck::cast_slice(&text_geometry.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }));
+                self.text_index_count = text_geometry.indices.len() as u32;
+            } else {
+                self.text_index_count = 0;
+            }
 
-            // Update text index buffer
-            let index_data = bytemuck::cast_slice(&text_geometry.indices);
-            self.text_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("text index buffer"),
-                contents: index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }));
-
-            self.text_index_count = text_geometry.indices.len() as u32;
-
-            // Update cursor geometry
-            let char_width = FONT_SIZE * 0.6;
-            let line_height = FONT_SIZE * 1.2;
-            let cursor_geometry = CursorGeometry::build_from_cursor(
-                cursor,
-                FONT_SIZE,
-                size.width as f32,
-                size.height as f32,
-                char_width,
-                line_height,
-            )
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            // Update cursor vertex buffer
-            let cursor_vertex_data = bytemuck::cast_slice(&cursor_geometry.vertices);
-            self.cursor_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("cursor vertex buffer"),
-                contents: cursor_vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
-
-            // Update cursor index buffer
-            let cursor_index_data = bytemuck::cast_slice(&cursor_geometry.indices);
-            self.cursor_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("cursor index buffer"),
-                contents: cursor_index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }));
-
-            self.cursor_index_count = cursor_geometry.indices.len() as u32;
-
-            // Update line numbers geometry
+            // Update line numbers
             let total_lines = buffer.len_lines();
-            let line_nums_geometry = LineNumbersGeometry::build(
-                total_lines,
-                glyph_atlas,
-                FONT_SIZE,
-                size.width as f32,
-                size.height as f32,
-            )
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let line_nums = LineNumbersGeometry::build(total_lines, glyph_atlas, &layout)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            // Update line numbers vertex buffer
-            let line_nums_vertex_data = bytemuck::cast_slice(&line_nums_geometry.vertices);
-            self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("line numbers vertex buffer"),
-                contents: line_nums_vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
+            if !line_nums.vertices.is_empty() {
+                self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("line numbers vertex buffer"),
+                    contents: bytemuck::cast_slice(&line_nums.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }));
+                self.line_numbers_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("line numbers index buffer"),
+                    contents: bytemuck::cast_slice(&line_nums.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }));
+                self.line_numbers_index_count = line_nums.indices.len() as u32;
+            } else {
+                self.line_numbers_index_count = 0;
+            }
 
-            // Update line numbers index buffer
-            let line_nums_index_data = bytemuck::cast_slice(&line_nums_geometry.indices);
-            self.line_numbers_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("line numbers index buffer"),
-                contents: line_nums_index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }));
+            // Update status bar
+            let status_bar = StatusBarGeometry::build(cursor, buffer, glyph_atlas, &layout)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            self.line_numbers_index_count = line_nums_geometry.indices.len() as u32;
+            if !status_bar.vertices.is_empty() {
+                self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("status bar vertex buffer"),
+                    contents: bytemuck::cast_slice(&status_bar.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }));
+                self.status_bar_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("status bar index buffer"),
+                    contents: bytemuck::cast_slice(&status_bar.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }));
+                self.status_bar_index_count = status_bar.indices.len() as u32;
+            } else {
+                self.status_bar_index_count = 0;
+            }
 
-            // Update status bar geometry
-            let status_bar_geometry = StatusBarGeometry::build(
-                cursor,
-                glyph_atlas,
-                FONT_SIZE,
-                size.width as f32,
-                size.height as f32,
-            )
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            // Update status bar vertex buffer
-            let status_bar_vertex_data = bytemuck::cast_slice(&status_bar_geometry.vertices);
-            self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("status bar vertex buffer"),
-                contents: status_bar_vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
-
-            // Update status bar index buffer
-            let status_bar_index_data = bytemuck::cast_slice(&status_bar_geometry.indices);
-            self.status_bar_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("status bar index buffer"),
-                contents: status_bar_index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }));
-
-            self.status_bar_index_count = status_bar_geometry.indices.len() as u32;
-
-            // Update atlas texture if needed
+            // Update atlas texture
             if let Some(atlas_texture) = &self.atlas_texture {
                 self.queue.write_texture(
                     wgpu::ImageCopyTexture {
@@ -497,6 +481,22 @@ impl State {
                     },
                 );
             }
+        }
+
+        // Update cursor (doesn't need glyph atlas)
+        let cursor_geom = CursorGeometry::build(cursor, buffer, &layout);
+        if !cursor_geom.vertices.is_empty() {
+            self.cursor_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("cursor vertex buffer"),
+                contents: bytemuck::cast_slice(&cursor_geom.vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+            self.cursor_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("cursor index buffer"),
+                contents: bytemuck::cast_slice(&cursor_geom.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+            self.cursor_index_count = cursor_geom.indices.len() as u32;
         }
 
         Ok(())
@@ -526,10 +526,10 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.03,
-                            g: 0.03,
-                            b: 0.03,
-                            a: 1.0,
+                            r: Colors::BACKGROUND[0] as f64,
+                            g: Colors::BACKGROUND[1] as f64,
+                            b: Colors::BACKGROUND[2] as f64,
+                            a: Colors::BACKGROUND[3] as f64,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -539,14 +539,22 @@ impl State {
                 occlusion_query_set: None,
             });
 
-            // Render text
+            // 1. Render UI backgrounds (gutter, status bar)
+            if let Some(pipeline) = &self.color_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer) {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.ui_bg_index_count, 0, 0..1);
+                }
+            }
+
+            // 2. Render text
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
-
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
-
                 if let (Some(vb), Some(ib)) = (&self.text_vertex_buffer, &self.text_index_buffer) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
@@ -554,25 +562,12 @@ impl State {
                 }
             }
 
-            // Render cursor
-            if let Some(pipeline) = &self.cursor_pipeline {
-                render_pass.set_pipeline(pipeline);
-
-                if let (Some(vb), Some(ib)) = (&self.cursor_vertex_buffer, &self.cursor_index_buffer) {
-                    render_pass.set_vertex_buffer(0, vb.slice(..));
-                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
-                    render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
-                }
-            }
-
-            // Render line numbers
+            // 3. Render line numbers
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
-
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
-
                 if let (Some(vb), Some(ib)) = (&self.line_numbers_vertex_buffer, &self.line_numbers_index_buffer) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
@@ -580,18 +575,26 @@ impl State {
                 }
             }
 
-            // Render status bar
+            // 4. Render status bar text
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
-
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
-
                 if let (Some(vb), Some(ib)) = (&self.status_bar_vertex_buffer, &self.status_bar_index_buffer) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.status_bar_index_count, 0, 0..1);
+                }
+            }
+
+            // 5. Render cursor (on top)
+            if let Some(pipeline) = &self.color_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let (Some(vb), Some(ib)) = (&self.cursor_vertex_buffer, &self.cursor_index_buffer) {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
                 }
             }
         }
@@ -606,4 +609,3 @@ impl State {
         &self.window
     }
 }
-
