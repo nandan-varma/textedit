@@ -9,8 +9,9 @@ resolver = "2"
 winit = { version = "0.30", features = ["android-native-activity"] }
 
 # Graphics
-wgpu = "0.20"
+wgpu = { version = "0.20", features = ["webgpu"] }
 pollster = "0.3"
+bytemuck = { version = "1.14", features = ["derive"] }
 
 # Text & Unicode
 ropey = "1.6"
