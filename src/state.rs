@@ -5,6 +5,7 @@ use wgpu::util::DeviceExt;
 use crate::renderer::glyph_cache::GlyphAtlas;
 use crate::renderer::text_geometry::TextGeometry;
 use crate::renderer::cursor::CursorGeometry;
+use crate::renderer::line_numbers::LineNumbersGeometry;
 use crate::editor::{Buffer, Cursor};
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
@@ -27,6 +28,9 @@ pub struct State {
     cursor_vertex_buffer: Option<wgpu::Buffer>,
     cursor_index_buffer: Option<wgpu::Buffer>,
     cursor_index_count: u32,
+    line_numbers_vertex_buffer: Option<wgpu::Buffer>,
+    line_numbers_index_buffer: Option<wgpu::Buffer>,
+    line_numbers_index_count: u32,
 }
 
 impl State {
@@ -195,6 +199,9 @@ impl State {
             cursor_vertex_buffer: None,
             cursor_index_buffer: None,
             cursor_index_count: 0,
+            line_numbers_vertex_buffer: None,
+            line_numbers_index_buffer: None,
+            line_numbers_index_count: 0,
         })
     }
 
@@ -404,6 +411,35 @@ impl State {
 
             self.cursor_index_count = cursor_geometry.indices.len() as u32;
 
+            // Update line numbers geometry
+            let total_lines = buffer.len_lines();
+            let line_nums_geometry = LineNumbersGeometry::build(
+                total_lines,
+                glyph_atlas,
+                FONT_SIZE,
+                size.width as f32,
+                size.height as f32,
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+            // Update line numbers vertex buffer
+            let line_nums_vertex_data = bytemuck::cast_slice(&line_nums_geometry.vertices);
+            self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("line numbers vertex buffer"),
+                contents: line_nums_vertex_data,
+                usage: wgpu::BufferUsages::VERTEX,
+            }));
+
+            // Update line numbers index buffer
+            let line_nums_index_data = bytemuck::cast_slice(&line_nums_geometry.indices);
+            self.line_numbers_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("line numbers index buffer"),
+                contents: line_nums_index_data,
+                usage: wgpu::BufferUsages::INDEX,
+            }));
+
+            self.line_numbers_index_count = line_nums_geometry.indices.len() as u32;
+
             // Update atlas texture if needed
             if let Some(atlas_texture) = &self.atlas_texture {
                 self.queue.write_texture(
@@ -491,6 +527,21 @@ impl State {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
+                }
+            }
+
+            // Render line numbers
+            if let Some(pipeline) = &self.text_pipeline {
+                render_pass.set_pipeline(pipeline);
+
+                if let Some(bind_group) = &self.atlas_bind_group {
+                    render_pass.set_bind_group(0, bind_group, &[]);
+                }
+
+                if let (Some(vb), Some(ib)) = (&self.line_numbers_vertex_buffer, &self.line_numbers_index_buffer) {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.line_numbers_index_count, 0, 0..1);
                 }
             }
         }

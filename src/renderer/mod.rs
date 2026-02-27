@@ -1,4 +1,5 @@
 pub mod cursor;
 pub mod glyph_cache;
+pub mod line_numbers;
 pub mod text;
 pub mod text_geometry;
