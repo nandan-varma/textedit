@@ -1,85 +1,180 @@
-# eframe template
+# textedit - A High-Performance Text Editor Built with Rust, wgpu, and Winit
 
-[![dependency status](https://deps.rs/repo/github/emilk/eframe_template/status.svg)](https://deps.rs/repo/github/emilk/eframe_template)
-[![Build Status](https://github.com/emilk/eframe_template/workflows/CI/badge.svg)](https://github.com/emilk/eframe_template/actions?workflow=CI)
+A minimalist, high-performance text editor similar to Notepad++ with a foundation ready for future expansion. Built entirely with hand-rolled UI using **wgpu** for absolute performance and cross-platform support.
 
-This is a template repo for [eframe](https://github.com/emilk/egui/tree/master/crates/eframe), a framework for writing apps using [egui](https://github.com/emilk/egui/).
+## Architecture Overview
 
-The goal is for this to be the simplest way to get started writing a GUI app in Rust.
+### Core Stack
+- **wgpu 0.20**: GPU rendering backend with multi-platform support (Vulkan, Metal, DX12, WebGPU)
+- **winit 0.30**: Cross-platform windowing and event handling (Windows, macOS, Linux)
+- **ropey 1.6**: Efficient rope data structure for text buffer operations
+- **fontdue 0.7**: Fast font rasterization for glyph rendering
+- **arboard 3.3**: Cross-platform clipboard support
 
-You can compile your app natively or for the web, and share it using Github Pages.
+### Project Structure
 
-## Getting started
+```
+src/
+├── main.rs              # Application entry point
+├── app.rs               # ApplicationHandler (winit event loop integration)
+├── state.rs             # wgpu State (device, queue, surface)
+├── config.rs            # Configuration (theme, fonts)
+├── file.rs              # File I/O operations
+├── editor/
+│   ├── mod.rs           # Editor orchestrator
+│   ├── buffer.rs        # Text buffer (ropey wrapper)
+│   ├── cursor.rs        # Cursor & selection management
+│   └── operations.rs    # Undo/redo operation history
+├── renderer/
+│   ├── mod.rs
+│   ├── text.rs          # Text layout & rendering
+│   └── glyph_cache.rs   # Glyph caching (foundation)
+└── ui/
+    ├── mod.rs
+    ├── components.rs    # Status bar, line numbers
+    └── layout.rs        # UI positioning
+```
 
-Start by clicking "Use this template" at https://github.com/emilk/eframe_template/ or follow [these instructions](https://docs.github.com/en/free-pro-team@latest/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template).
+## MVP Features
 
-Change the name of the crate: Choose a good name for your project, and change the name to it in:
-* `Cargo.toml`
-    * Change the `package.name` from `eframe_template` to `your_crate`.
-    * Change the `package.authors`
-* `main.rs`
-    * Change `eframe_template::TemplateApp` to `your_crate::TemplateApp`
-* `index.html`
-    * Change the `<title>eframe template</title>` to `<title>your_crate</title>`. optional.
-* `assets/sw.js`
-  * Change the `'./eframe_template.js'` to `./your_crate.js` (in `filesToCache` array)
-  * Change the `'./eframe_template_bg.wasm'` to `./your_crate_bg.wasm` (in `filesToCache` array)
+### Text Editing
+- ✅ Character insertion with full Unicode support
+- ✅ Backspace and Delete keys
+- ✅ Tab support (4-space indentation)
+- ✅ Enter for newlines
+- ✅ Arrow key navigation (Left, Right, Up, Down)
+- ✅ Home and End key navigation
+- ✅ Selection management
 
-Alternatively, you can run `fill_template.sh` which will ask for the needed names and email and perform the above patches for you. This is particularly useful if you clone this repository outside GitHub and hence cannot make use of its
-templating function.
+### File Operations
+- ✅ Open and save text files
+- ✅ UTF-8 encoding support
+- ✅ File path tracking
 
-### Learning about egui
+### Editing Features
+- ✅ **Undo/Redo** (Ctrl+Z / Ctrl+Y)
+- ✅ **Cut/Copy/Paste** (Ctrl+X / Ctrl+C / Ctrl+V)
+- ✅ **Save** (Ctrl+S)
+- ✅ Operation history with efficient memory management
 
-`src/app.rs` contains a simple example app. This is just to give some inspiration - most of it can be removed if you like.
+### UI Components
+- ✅ Dark theme by default
+- ✅ Status bar foundation
+- ✅ Line numbers foundation
+- ✅ Window management and resizing
 
-The official egui docs are at <https://docs.rs/egui>. If you prefer watching a video introduction, check out <https://www.youtube.com/watch?v=NtUkr_z7l84>. For inspiration, check out the [the egui web demo](https://emilk.github.io/egui/index.html) and follow the links in it to its source code.
+## Building & Running
 
-### Testing locally
+### Prerequisites
+- Rust 1.70+ (with 2021 edition support)
+- Cargo
 
-`cargo run --release`
+### Build
+```bash
+cargo build --release
+```
 
-On Linux you need to first run:
+### Run
+```bash
+./target/release/textedit
+```
 
-`sudo apt-get install libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev`
+### Development
+```bash
+cargo run
+```
 
-On Fedora Rawhide you need to run:
+## Keyboard Shortcuts
 
-`dnf install clang clang-devel clang-tools-extra libxkbcommon-devel pkg-config openssl-devel libxcb-devel gtk3-devel atk fontconfig-devel`
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Ctrl+C` | Copy selection |
+| `Ctrl+X` | Cut selection |
+| `Ctrl+V` | Paste |
+| `Ctrl+S` | Save file |
+| `Arrow Keys` | Move cursor |
+| `Home` / `End` | Move to line start/end |
+| `Backspace` | Delete previous character |
+| `Delete` | Delete current character |
+| `Tab` | Insert 4 spaces |
+| `Enter` | New line |
 
-### Web Locally
+## Future Roadmap
 
-You can compile your app to [WASM](https://en.wikipedia.org/wiki/WebAssembly) and publish it as a web page.
+### Phase 2: Rendering & UI Polish
+- [ ] Proper text rendering with glyph atlas and batching
+- [ ] Syntax highlighting framework
+- [ ] Theme customization (dark/light mode toggle)
+- [ ] Custom font support with system font fallback
+- [ ] Cursor visibility and blinking animation
+- [ ] Selection highlighting with proper colors
 
-We use [Trunk](https://trunkrs.dev/) to build for web target.
-1. Install the required target with `rustup target add wasm32-unknown-unknown`.
-2. Install Trunk with `cargo install --locked trunk`.
-3. Run `trunk serve` to build and serve on `http://127.0.0.1:8080`. Trunk will rebuild automatically if you edit the project.
-4. Open `http://127.0.0.1:8080/index.html#dev` in a browser. See the warning below.
+### Phase 3: Advanced Features
+- [ ] Multi-file tabs/buffers
+- [ ] Find & Replace (Ctrl+H)
+- [ ] Search highlighting (Ctrl+F)
+- [ ] Word wrap toggle
+- [ ] Line/column display in status bar
+- [ ] File modification indicator
 
-> `assets/sw.js` script will try to cache our app, and loads the cached version when it cannot connect to server allowing your app to work offline (like PWA).
-> appending `#dev` to `index.html` will skip this caching, allowing us to load the latest builds during development.
+### Phase 4: Developer Experience
+- [ ] Settings file (TOML config)
+- [ ] Persistent window state
+- [ ] Recent files list
+- [ ] Configuration documentation
+- [ ] Performance profiling & optimization
 
-### Web Deploy
-1. Just run `trunk build --release`.
-2. It will generate a `dist` directory as a "static html" website
-3. Upload the `dist` directory to any of the numerous free hosting websites including [GitHub Pages](https://docs.github.com/en/free-pro-team@latest/github/working-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).
-4. we already provide a workflow that auto-deploys our app to GitHub pages if you enable it.
-> To enable Github Pages, you need to go to Repository -> Settings -> Pages -> Source -> set to `gh-pages` branch and `/` (root).
->
-> If `gh-pages` is not available in `Source`, just create and push a branch called `gh-pages` and it should be available.
->
-> If you renamed the `main` branch to something else (say you re-initialized the repository with `master` as the initial branch), be sure to edit the github workflows `.github/workflows/pages.yml` file to reflect the change
-> ```yml
-> on:
->   push:
->     branches:
->       - <branch name>
-> ```
+### Phase 5: Extended Features
+- [ ] Minimap
+- [ ] Code folding
+- [ ] Split view editing
+- [ ] Multi-cursor support
+- [ ] Macro recording
+- [ ] Plugin system foundation
 
-You can test the template app at <https://emilk.github.io/eframe_template/>.
+## Architecture Decisions
 
-## Updating egui
+### Why wgpu?
+- **Cross-platform**: Single codebase for Windows, macOS, Linux, and WebGPU (future)
+- **Performance**: Direct GPU access without runtime overhead
+- **Modern**: Uses latest graphics APIs (Vulkan, Metal, DX12)
+- **Battle-tested**: Used in production Rust projects
 
-As of 2023, egui is in active development with frequent releases with breaking changes. [eframe_template](https://github.com/emilk/eframe_template/) will be updated in lock-step to always use the latest version of egui.
+### Why Rope for Text Buffer?
+- **Efficient insertions/deletions**: O(log n) for typical operations
+- **Memory efficient**: Doesn't require reallocating entire buffer on edits
+- **UTF-8 safe**: ropey handles Unicode grapheme boundaries correctly
 
-When updating `egui` and `eframe` it is recommended you do so one version at the time, and read about the changes in [the egui changelog](https://github.com/emilk/egui/blob/master/CHANGELOG.md) and [eframe changelog](https://github.com/emilk/egui/blob/master/crates/eframe/CHANGELOG.md).
+### Battle-Tested Dependencies
+All dependencies are carefully selected for production use:
+- `ropey`: Standard choice for text editors in Rust
+- `winit`: Industry standard for Rust GUI windowing
+- `wgpu`: WebGPU standard implementation
+- `arboard`: Only pure-Rust clipboard solution
+
+## Performance Notes
+
+The foundation is designed for performance:
+- Immediate-mode rendering ready (no retained state overhead)
+- Lazy glyph caching to avoid font rendering bottlenecks
+- Direct GPU rendering pipeline
+- No unnecessary allocations in hot paths
+- Rope data structure scales to multi-megabyte files
+
+## Contributing
+
+This is the MVP foundation. Areas ready for enhancement:
+1. **Text Rendering**: Implement actual glyph atlas rendering
+2. **UI Components**: Full implementation of line numbers and status bar
+3. **Features**: Syntax highlighting, search, etc.
+4. **Optimization**: Profile and optimize hot paths
+
+## License
+
+Check LICENSE files in repository root for licensing information.
+
+---
+
+**Status**: MVP Complete. Ready for phase 2 rendering implementation.
