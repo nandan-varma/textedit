@@ -1,149 +1,143 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct Cursor {
-    pub line: usize,
-    pub col: usize,
-    pub offset: usize,
+#[derive(Clone, Copy, Debug)]
+pub struct CursorPos {
+    pub char_idx: usize,
 }
 
-impl Cursor {
-    pub fn new(line: usize, col: usize, offset: usize) -> Self {
-        Self { line, col, offset }
-    }
-
-    pub fn move_to(&mut self, line: usize, col: usize, offset: usize) {
-        self.line = line;
-        self.col = col;
-        self.offset = offset;
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct Selection {
-    pub start: Cursor,
-    pub end: Cursor,
+    pub start: usize,
+    pub end: usize,
 }
 
 impl Selection {
-    pub fn new(start: Cursor, end: Cursor) -> Self {
-        Self { start, end }
+    pub fn new(start: usize, end: usize) -> Self {
+        Self {
+            start: start.min(end),
+            end: start.max(end),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.start.offset == self.end.offset
+        self.start == self.end
     }
 
-    pub fn normalize(&self) -> (usize, usize) {
-        let start = self.start.offset.min(self.end.offset);
-        let end = self.start.offset.max(self.end.offset);
-        (start, end)
-    }
-
-    pub fn from_single_cursor(cursor: Cursor) -> Self {
-        Self {
-            start: cursor,
-            end: cursor,
-        }
+    pub fn len(&self) -> usize {
+        self.end - self.start
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct CursorState {
-    pub primary: Cursor,
-    pub selections: Vec<Selection>,
-    pub anchor: Cursor,
+pub struct Cursor {
+    position: usize,
+    selection: Option<Selection>,
+    preferred_col: Option<usize>, // For maintaining column during vertical movement
 }
 
-impl CursorState {
+impl Cursor {
     pub fn new() -> Self {
-        let cursor = Cursor::new(0, 0, 0);
         Self {
-            primary: cursor,
-            selections: vec![Selection::from_single_cursor(cursor)],
-            anchor: cursor,
+            position: 0,
+            selection: None,
+            preferred_col: None,
         }
     }
 
-    pub fn move_to(&mut self, line: usize, col: usize, offset: usize) {
-        let cursor = Cursor::new(line, col, offset);
-        self.primary = cursor;
-        self.selections = vec![Selection::from_single_cursor(cursor)];
-        self.anchor = cursor;
+    pub fn position(&self) -> usize {
+        self.position
     }
 
-    pub fn set_selection(&mut self, selection: Selection) {
-        self.primary = if selection.start.offset <= selection.end.offset {
-            selection.start
-        } else {
-            selection.end
-        };
-        self.selections = vec![selection];
+    pub fn set_position(&mut self, pos: usize) {
+        self.position = pos;
+        self.selection = None;
+        self.preferred_col = None;
     }
 
-    pub fn get_cursor_offset(&self) -> usize {
-        self.primary.offset
+    pub fn selection(&self) -> Option<Selection> {
+        self.selection
     }
 
-    pub fn get_selection_range(&self) -> Option<(usize, usize)> {
-        let sel = self.selections.first()?;
-        let (start, end) = sel.normalize();
-        if start == end {
-            None
-        } else {
-            Some((start, end))
+    pub fn start_selection(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(Selection::new(self.position, self.position));
         }
     }
 
-    pub fn has_selection(&self) -> bool {
-        self.selections.iter().any(|s| !s.is_empty())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cursor_new() {
-        let cursor = Cursor::new(5, 10, 15);
-        assert_eq!(cursor.line, 5);
-        assert_eq!(cursor.col, 10);
-        assert_eq!(cursor.offset, 15);
+    pub fn end_selection(&mut self) {
+        self.selection = None;
     }
 
-    #[test]
-    fn test_selection_empty() {
-        let sel = Selection::from_single_cursor(Cursor::new(0, 0, 0));
-        assert!(sel.is_empty());
+    pub fn extend_selection(&mut self, pos: usize) {
+        if let Some(ref mut sel) = self.selection {
+            sel.end = pos;
+        } else {
+            self.selection = Some(Selection::new(self.position, pos));
+        }
+        self.position = pos;
     }
 
-    #[test]
-    fn test_selection_normalize() {
-        let sel = Selection::new(Cursor::new(2, 5, 10), Cursor::new(1, 3, 5));
-        let (start, end) = sel.normalize();
-        assert_eq!(start, 5);
-        assert_eq!(end, 10);
+    pub fn move_forward(&mut self, buffer_len: usize) {
+        if self.position < buffer_len {
+            self.position = self.position.saturating_add(1).min(buffer_len);
+        }
+        self.selection = None;
+        self.preferred_col = None;
     }
 
-    #[test]
-    fn test_cursor_state_selection_range() {
-        let mut state = CursorState::new();
-
-        state.set_selection(Selection::new(Cursor::new(0, 5, 5), Cursor::new(0, 10, 10)));
-
-        assert_eq!(state.get_selection_range(), Some((5, 10)));
-
-        state.move_to(0, 0, 0);
-        assert!(state.get_selection_range().is_none());
+    pub fn move_backward(&mut self) {
+        self.position = self.position.saturating_sub(1);
+        self.selection = None;
+        self.preferred_col = None;
     }
 
-    #[test]
-    fn test_has_selection() {
-        let mut state = CursorState::new();
-        assert!(!state.has_selection());
+    pub fn move_to_line_start(&mut self, buffer: &crate::editor::Buffer) {
+        let (line, _) = buffer.char_to_line_col(self.position);
+        if let Some(idx) = buffer.line_col_to_char(line, 0) {
+            self.position = idx;
+        }
+        self.selection = None;
+        self.preferred_col = Some(0);
+    }
 
-        state.set_selection(Selection::new(Cursor::new(0, 0, 0), Cursor::new(0, 5, 5)));
-        assert!(state.has_selection());
+    pub fn move_to_line_end(&mut self, buffer: &crate::editor::Buffer) {
+        let (line, _) = buffer.char_to_line_col(self.position);
+        if let Some(line_str) = buffer.line(line) {
+            let col = line_str.len();
+            if let Some(idx) = buffer.line_col_to_char(line, col) {
+                self.position = idx;
+                self.preferred_col = Some(col);
+            }
+        }
+        self.selection = None;
+    }
+
+    pub fn move_up(&mut self, buffer: &crate::editor::Buffer) {
+        let (line, col) = buffer.char_to_line_col(self.position);
+        if line > 0 {
+            let target_col = self.preferred_col.unwrap_or(col);
+            if let Some(idx) = buffer.line_col_to_char(line - 1, target_col) {
+                self.position = idx;
+            } else if let Some(line_str) = buffer.line(line - 1) {
+                if let Some(idx) = buffer.line_col_to_char(line - 1, line_str.len()) {
+                    self.position = idx;
+                }
+            }
+            self.preferred_col = Some(target_col);
+        }
+        self.selection = None;
+    }
+
+    pub fn move_down(&mut self, buffer: &crate::editor::Buffer) {
+        let (line, col) = buffer.char_to_line_col(self.position);
+        if line + 1 < buffer.len_lines() {
+            let target_col = self.preferred_col.unwrap_or(col);
+            if let Some(idx) = buffer.line_col_to_char(line + 1, target_col) {
+                self.position = idx;
+            } else if let Some(line_str) = buffer.line(line + 1) {
+                if let Some(idx) = buffer.line_col_to_char(line + 1, line_str.len()) {
+                    self.position = idx;
+                }
+            }
+            self.preferred_col = Some(target_col);
+        }
+        self.selection = None;
     }
 }
