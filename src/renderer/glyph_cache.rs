@@ -7,6 +7,8 @@ pub struct GlyphMetrics {
     pub advance_height: f32,
     pub bounds_width: u32,
     pub bounds_height: u32,
+    pub xmin: i32, // Horizontal offset from origin
+    pub ymin: i32, // Vertical offset from baseline (positive = above baseline)
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +35,8 @@ pub struct GlyphAtlas {
     current_y: u32,
     row_height: u32,
     padding: u32,
+    ascent: f32,  // Distance from baseline to top of tallest glyph
+    descent: f32, // Distance from baseline to bottom of lowest glyph (negative)
 }
 
 impl GlyphAtlas {
@@ -45,6 +49,15 @@ impl GlyphAtlas {
         let font = Font::from_bytes(font_data, fontdue::FontSettings::default())
             .map_err(|e| format!("Failed to load font: {}", e))?;
 
+        // Get font metrics for baseline calculations
+        let line_metrics = font.horizontal_line_metrics(font_size);
+        let (ascent, descent) = if let Some(lm) = line_metrics {
+            (lm.ascent, lm.descent)
+        } else {
+            // Fallback: estimate from font size
+            (font_size * 0.8, font_size * -0.2)
+        };
+
         Ok(Self {
             font,
             font_size,
@@ -56,7 +69,24 @@ impl GlyphAtlas {
             current_y: 0,
             row_height: 0,
             padding: 2,
+            ascent,
+            descent,
         })
+    }
+
+    /// Get the ascent (distance from baseline to top)
+    pub fn ascent(&self) -> f32 {
+        self.ascent
+    }
+
+    /// Get the descent (distance from baseline to bottom, typically negative)
+    pub fn descent(&self) -> f32 {
+        self.descent
+    }
+
+    /// Get the total line height based on font metrics
+    pub fn line_height(&self) -> f32 {
+        self.ascent - self.descent
     }
 
     pub fn get_or_rasterize(&mut self, ch: char) -> Result<&AtlasEntry, String> {
@@ -81,6 +111,8 @@ impl GlyphAtlas {
                     advance_height: metrics.advance_height,
                     bounds_width: 0,
                     bounds_height: 0,
+                    xmin: metrics.xmin,
+                    ymin: metrics.ymin,
                 },
                 uv_min_x: 0.0,
                 uv_min_y: 0.0,
@@ -129,6 +161,8 @@ impl GlyphAtlas {
                 advance_height: metrics.advance_height,
                 bounds_width: width,
                 bounds_height: height,
+                xmin: metrics.xmin,
+                ymin: metrics.ymin,
             },
             uv_min_x: padded_x as f32 / atlas_width_f,
             uv_min_y: padded_y as f32 / atlas_height_f,

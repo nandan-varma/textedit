@@ -33,12 +33,17 @@ impl TextGeometry {
         let lines = buffer.lines();
         let visible_lines = layout.visible_lines().min(lines.len());
 
+        // Get font metrics for baseline positioning
+        let ascent = glyph_atlas.ascent();
+
         for line_idx in 0..visible_lines {
             let line = &lines[line_idx];
 
             // Get baseline position for this line
+            // The baseline is ascent pixels down from the top of the line
             let base_x = layout.text_area.x + layout.text_area_padding_left;
-            let base_y = layout.text_area_padding_top + (line_idx as f32 * layout.line_height);
+            let baseline_y =
+                layout.text_area_padding_top + (line_idx as f32 * layout.line_height) + ascent;
 
             let mut x_offset = 0.0;
 
@@ -62,9 +67,13 @@ impl TextGeometry {
                     continue;
                 }
 
-                // Calculate pixel position
-                let glyph_x = base_x + x_offset;
-                let glyph_y = base_y + (layout.line_height - entry.height as f32) * 0.5; // Center vertically
+                // Calculate pixel position using proper font metrics
+                // xmin is the horizontal bearing (offset from pen position)
+                // ymin is the vertical offset from baseline (positive = glyph extends above baseline)
+                let glyph_x = base_x + x_offset + entry.metrics.xmin as f32;
+                // For top-left origin: baseline_y - ymin - height positions the glyph correctly
+                // ymin tells us how far the top of the glyph is from the baseline
+                let glyph_y = baseline_y - entry.metrics.ymin as f32 - entry.height as f32;
 
                 // Convert to NDC
                 let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);

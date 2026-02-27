@@ -26,14 +26,18 @@ impl LineNumbersGeometry {
         let visible_lines = layout.visible_lines().min(total_lines.max(1));
         let max_digits = total_lines.max(1).to_string().len();
 
+        // Get font metrics for baseline positioning
+        let ascent = glyph_atlas.ascent();
+
         for line_num in 1..=visible_lines {
             let line_str = format!("{:>width$}", line_num, width = max_digits);
 
             // Calculate position - right-aligned in gutter
             let text_width: f32 = line_str.len() as f32 * layout.char_width;
             let base_x = layout.gutter.width - layout.line_number_padding_right - text_width;
-            let base_y =
-                layout.text_area_padding_top + ((line_num - 1) as f32 * layout.line_height);
+            let baseline_y = layout.text_area_padding_top
+                + ((line_num - 1) as f32 * layout.line_height)
+                + ascent;
 
             let mut x_offset = 0.0;
 
@@ -51,9 +55,9 @@ impl LineNumbersGeometry {
                     continue;
                 }
 
-                // Calculate pixel position
-                let glyph_x = base_x + x_offset;
-                let glyph_y = base_y + (layout.line_height - entry.height as f32) * 0.5;
+                // Calculate pixel position using proper font metrics
+                let glyph_x = base_x + x_offset + entry.metrics.xmin as f32;
+                let glyph_y = baseline_y - entry.metrics.ymin as f32 - entry.height as f32;
 
                 // Convert to NDC
                 let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);

@@ -37,9 +37,12 @@ impl StatusBarGeometry {
             total_lines
         );
 
-        // Position in status bar (vertically centered)
+        // Get font metrics for baseline positioning
+        let ascent = glyph_atlas.ascent();
+
+        // Position in status bar - baseline is centered vertically
         let base_x = layout.status_bar.x + layout.status_bar_padding;
-        let base_y = layout.status_bar.y + (layout.status_bar.height - layout.font_size) * 0.5;
+        let baseline_y = layout.status_bar.y + (layout.status_bar.height + ascent) * 0.5;
 
         let mut x_offset = 0.0;
 
@@ -57,9 +60,9 @@ impl StatusBarGeometry {
                 continue;
             }
 
-            // Calculate pixel position
-            let glyph_x = base_x + x_offset;
-            let glyph_y = base_y + (layout.font_size - entry.height as f32) * 0.5;
+            // Calculate pixel position using proper font metrics
+            let glyph_x = base_x + x_offset + entry.metrics.xmin as f32;
+            let glyph_y = baseline_y - entry.metrics.ymin as f32 - entry.height as f32;
 
             // Convert to NDC
             let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);
