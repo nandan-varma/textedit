@@ -1,5 +1,5 @@
 use super::glyph_cache::GlyphAtlas;
-use super::layout::{EditorLayout, TEXT_AREA_PADDING_LEFT, TEXT_AREA_PADDING_TOP};
+use super::layout::EditorLayout;
 use crate::editor::Buffer;
 
 #[repr(C)]
@@ -37,8 +37,8 @@ impl TextGeometry {
             let line = &lines[line_idx];
 
             // Get baseline position for this line
-            let base_x = layout.text_area.x + TEXT_AREA_PADDING_LEFT;
-            let base_y = TEXT_AREA_PADDING_TOP + (line_idx as f32 * layout.line_height);
+            let base_x = layout.text_area.x + layout.text_area_padding_left;
+            let base_y = layout.text_area_padding_top + (line_idx as f32 * layout.line_height);
 
             let mut x_offset = 0.0;
 

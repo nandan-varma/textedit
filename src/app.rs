@@ -69,6 +69,13 @@ impl ApplicationHandler for App {
                     state.resize(physical_size.width, physical_size.height);
                 }
             }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Some(state) = &mut self.state {
+                    if let Err(e) = state.set_scale_factor(scale_factor) {
+                        eprintln!("Failed to update scale factor: {}", e);
+                    }
+                }
+            }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = mods.state();
             }

@@ -1,5 +1,5 @@
 use super::glyph_cache::GlyphAtlas;
-use super::layout::{EditorLayout, LINE_NUMBER_PADDING_RIGHT, TEXT_AREA_PADDING_TOP};
+use super::layout::EditorLayout;
 use super::text_geometry::TextVertex;
 
 pub struct LineNumbersGeometry {
@@ -31,8 +31,9 @@ impl LineNumbersGeometry {
 
             // Calculate position - right-aligned in gutter
             let text_width: f32 = line_str.len() as f32 * layout.char_width;
-            let base_x = layout.gutter.width - LINE_NUMBER_PADDING_RIGHT - text_width;
-            let base_y = TEXT_AREA_PADDING_TOP + ((line_num - 1) as f32 * layout.line_height);
+            let base_x = layout.gutter.width - layout.line_number_padding_right - text_width;
+            let base_y =
+                layout.text_area_padding_top + ((line_num - 1) as f32 * layout.line_height);
 
             let mut x_offset = 0.0;
 

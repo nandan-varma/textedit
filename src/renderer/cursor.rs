@@ -1,4 +1,4 @@
-use super::layout::{Colors, EditorLayout, TEXT_AREA_PADDING_LEFT, TEXT_AREA_PADDING_TOP};
+use super::layout::{Colors, EditorLayout};
 use crate::editor::{Buffer, Cursor};
 
 #[repr(C)]
@@ -29,8 +29,9 @@ impl CursorGeometry {
         let (line, col) = buffer.char_to_line_col(cursor.position());
 
         // Calculate pixel position
-        let x = layout.text_area.x + TEXT_AREA_PADDING_LEFT + (col as f32 * layout.char_width);
-        let y = TEXT_AREA_PADDING_TOP + (line as f32 * layout.line_height);
+        let x =
+            layout.text_area.x + layout.text_area_padding_left + (col as f32 * layout.char_width);
+        let y = layout.text_area_padding_top + (line as f32 * layout.line_height);
 
         // Cursor is a thin vertical bar
         let cursor_width = 2.0;

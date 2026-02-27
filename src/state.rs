@@ -12,7 +12,7 @@ use crate::renderer::layout::{EditorLayout, Colors};
 use crate::editor::{Buffer, Cursor};
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
-const FONT_SIZE: f32 = 14.0;
+const BASE_FONT_SIZE: f32 = 14.0;
 
 pub struct State {
     surface: Surface<'static>,
@@ -20,6 +20,10 @@ pub struct State {
     pub queue: Queue,
     config: SurfaceConfiguration,
     window: Arc<Window>,
+    
+    // Scaling
+    scale_factor: f32,
+    scaled_font_size: f32,
     
     // Pipelines
     text_pipeline: Option<RenderPipeline>,
@@ -29,6 +33,7 @@ pub struct State {
     glyph_atlas: Option<GlyphAtlas>,
     atlas_texture: Option<wgpu::Texture>,
     atlas_bind_group: Option<BindGroup>,
+    bind_group_layout: Option<wgpu::BindGroupLayout>,
     
     // UI Background buffers
     ui_bg_vertex_buffer: Option<wgpu::Buffer>,
@@ -59,6 +64,8 @@ pub struct State {
 impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
+        let scale_factor = window.scale_factor() as f32;
+        let scaled_font_size = BASE_FONT_SIZE * scale_factor;
 
         // Create wgpu instance
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -106,9 +113,9 @@ impl State {
 
         surface.configure(&device, &config);
 
-        // Load system font
+        // Load system font with scaled font size
         let font_data = Self::load_system_font()?;
-        let glyph_atlas = GlyphAtlas::new(&font_data, FONT_SIZE, GLYPH_ATLAS_SIZE, GLYPH_ATLAS_SIZE)
+        let glyph_atlas = GlyphAtlas::new(&font_data, scaled_font_size, GLYPH_ATLAS_SIZE, GLYPH_ATLAS_SIZE)
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Create atlas texture
@@ -211,11 +218,14 @@ impl State {
             queue,
             config,
             window,
+            scale_factor,
+            scaled_font_size,
             text_pipeline: Some(text_pipeline),
             color_pipeline: Some(color_pipeline),
             glyph_atlas: Some(glyph_atlas),
             atlas_texture: Some(atlas_texture),
             atlas_bind_group: Some(atlas_bind_group),
+            bind_group_layout: Some(bind_group_layout),
             ui_bg_vertex_buffer: None,
             ui_bg_index_buffer: None,
             ui_bg_index_count: 0,
@@ -379,7 +389,7 @@ impl State {
 
     pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor) -> anyhow::Result<()> {
         let size = self.window.inner_size();
-        let layout = EditorLayout::new(size.width as f32, size.height as f32, FONT_SIZE);
+        let layout = EditorLayout::new(size.width as f32, size.height as f32, self.scaled_font_size, self.scale_factor);
 
         // Update UI backgrounds
         let ui_bg = UIBackgroundGeometry::build(&layout);
@@ -508,6 +518,48 @@ impl State {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
         }
+    }
+
+    /// Update scale factor and recreate glyph atlas with new font size
+    pub fn set_scale_factor(&mut self, scale_factor: f64) -> anyhow::Result<()> {
+        let new_scale = scale_factor as f32;
+        if (new_scale - self.scale_factor).abs() < 0.001 {
+            return Ok(()); // No significant change
+        }
+
+        self.scale_factor = new_scale;
+        self.scaled_font_size = BASE_FONT_SIZE * new_scale;
+
+        // Recreate glyph atlas with new font size
+        let font_data = Self::load_system_font()?;
+        let glyph_atlas = GlyphAtlas::new(&font_data, self.scaled_font_size, GLYPH_ATLAS_SIZE, GLYPH_ATLAS_SIZE)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        // Upload new atlas data
+        if let Some(atlas_texture) = &self.atlas_texture {
+            self.queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: atlas_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                glyph_atlas.atlas_data(),
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(GLYPH_ATLAS_SIZE),
+                    rows_per_image: Some(GLYPH_ATLAS_SIZE),
+                },
+                wgpu::Extent3d {
+                    width: GLYPH_ATLAS_SIZE,
+                    height: GLYPH_ATLAS_SIZE,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+
+        self.glyph_atlas = Some(glyph_atlas);
+        Ok(())
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {

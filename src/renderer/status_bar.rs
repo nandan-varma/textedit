@@ -1,5 +1,5 @@
 use super::glyph_cache::GlyphAtlas;
-use super::layout::{EditorLayout, STATUS_BAR_PADDING};
+use super::layout::EditorLayout;
 use super::text_geometry::TextVertex;
 use crate::editor::{Buffer, Cursor};
 
@@ -38,7 +38,7 @@ impl StatusBarGeometry {
         );
 
         // Position in status bar (vertically centered)
-        let base_x = layout.status_bar.x + STATUS_BAR_PADDING;
+        let base_x = layout.status_bar.x + layout.status_bar_padding;
         let base_y = layout.status_bar.y + (layout.status_bar.height - layout.font_size) * 0.5;
 
         let mut x_offset = 0.0;

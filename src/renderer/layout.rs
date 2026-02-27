@@ -1,12 +1,13 @@
 /// UI Layout constants and calculations for the text editor
-/// All measurements are in pixels unless specified otherwise
+/// All measurements are in base pixels (before scaling)
 
-pub const LINE_NUMBER_GUTTER_WIDTH: f32 = 50.0;
-pub const LINE_NUMBER_PADDING_RIGHT: f32 = 10.0;
-pub const TEXT_AREA_PADDING_LEFT: f32 = 10.0;
-pub const TEXT_AREA_PADDING_TOP: f32 = 5.0;
-pub const STATUS_BAR_HEIGHT: f32 = 24.0;
-pub const STATUS_BAR_PADDING: f32 = 8.0;
+// Base sizes (at 1x scale)
+pub const BASE_LINE_NUMBER_GUTTER_WIDTH: f32 = 50.0;
+pub const BASE_LINE_NUMBER_PADDING_RIGHT: f32 = 10.0;
+pub const BASE_TEXT_AREA_PADDING_LEFT: f32 = 10.0;
+pub const BASE_TEXT_AREA_PADDING_TOP: f32 = 5.0;
+pub const BASE_STATUS_BAR_HEIGHT: f32 = 24.0;
+pub const BASE_STATUS_BAR_PADDING: f32 = 8.0;
 
 /// Colors for the UI (RGBA, 0.0-1.0)
 pub struct Colors;
@@ -59,32 +60,48 @@ pub struct EditorLayout {
     pub font_size: f32,
     pub line_height: f32,
     pub char_width: f32,
+    pub scale_factor: f32,
+    // Scaled constants
+    pub gutter_width: f32,
+    pub line_number_padding_right: f32,
+    pub text_area_padding_left: f32,
+    pub text_area_padding_top: f32,
+    pub status_bar_height: f32,
+    pub status_bar_padding: f32,
 }
 
 impl EditorLayout {
-    pub fn new(viewport_width: f32, viewport_height: f32, font_size: f32) -> Self {
+    pub fn new(
+        viewport_width: f32,
+        viewport_height: f32,
+        font_size: f32,
+        scale_factor: f32,
+    ) -> Self {
         let line_height = (font_size * 1.4).round();
         let char_width = (font_size * 0.6).round();
 
-        let gutter = Rect::new(
-            0.0,
-            0.0,
-            LINE_NUMBER_GUTTER_WIDTH,
-            viewport_height - STATUS_BAR_HEIGHT,
-        );
+        // Scale all layout constants
+        let gutter_width = (BASE_LINE_NUMBER_GUTTER_WIDTH * scale_factor).round();
+        let line_number_padding_right = (BASE_LINE_NUMBER_PADDING_RIGHT * scale_factor).round();
+        let text_area_padding_left = (BASE_TEXT_AREA_PADDING_LEFT * scale_factor).round();
+        let text_area_padding_top = (BASE_TEXT_AREA_PADDING_TOP * scale_factor).round();
+        let status_bar_height = (BASE_STATUS_BAR_HEIGHT * scale_factor).round();
+        let status_bar_padding = (BASE_STATUS_BAR_PADDING * scale_factor).round();
+
+        let gutter = Rect::new(0.0, 0.0, gutter_width, viewport_height - status_bar_height);
 
         let text_area = Rect::new(
-            LINE_NUMBER_GUTTER_WIDTH,
+            gutter_width,
             0.0,
-            viewport_width - LINE_NUMBER_GUTTER_WIDTH,
-            viewport_height - STATUS_BAR_HEIGHT,
+            viewport_width - gutter_width,
+            viewport_height - status_bar_height,
         );
 
         let status_bar = Rect::new(
             0.0,
-            viewport_height - STATUS_BAR_HEIGHT,
+            viewport_height - status_bar_height,
             viewport_width,
-            STATUS_BAR_HEIGHT,
+            status_bar_height,
         );
 
         Self {
@@ -96,6 +113,13 @@ impl EditorLayout {
             font_size,
             line_height,
             char_width,
+            scale_factor,
+            gutter_width,
+            line_number_padding_right,
+            text_area_padding_left,
+            text_area_padding_top,
+            status_bar_height,
+            status_bar_padding,
         }
     }
 
@@ -116,8 +140,8 @@ impl EditorLayout {
 
     /// Get the pixel position for a text character at given line and column
     pub fn text_position(&self, line: usize, column: usize) -> [f32; 2] {
-        let x = self.text_area.x + TEXT_AREA_PADDING_LEFT + (column as f32 * self.char_width);
-        let y = TEXT_AREA_PADDING_TOP + (line as f32 * self.line_height);
+        let x = self.text_area.x + self.text_area_padding_left + (column as f32 * self.char_width);
+        let y = self.text_area_padding_top + (line as f32 * self.line_height);
         [x, y]
     }
 
@@ -125,8 +149,8 @@ impl EditorLayout {
     pub fn line_number_position(&self, line: usize, num_digits: usize) -> [f32; 2] {
         // Right-align line numbers in gutter
         let text_width = num_digits as f32 * self.char_width;
-        let x = self.gutter.width - LINE_NUMBER_PADDING_RIGHT - text_width;
-        let y = TEXT_AREA_PADDING_TOP + (line as f32 * self.line_height);
+        let x = self.gutter.width - self.line_number_padding_right - text_width;
+        let y = self.text_area_padding_top + (line as f32 * self.line_height);
         [x, y]
     }
 
@@ -137,6 +161,7 @@ impl EditorLayout {
 
     /// Number of visible lines in the text area
     pub fn visible_lines(&self) -> usize {
-        ((self.text_area.height - TEXT_AREA_PADDING_TOP * 2.0) / self.line_height).floor() as usize
+        ((self.text_area.height - self.text_area_padding_top * 2.0) / self.line_height).floor()
+            as usize
     }
 }
