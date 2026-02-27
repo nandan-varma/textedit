@@ -1,5 +1,5 @@
 use crate::editor::{Document, FileEncoding, LineEnding, TextBuffer};
-use crate::features::{Settings, Theme, UndoManager};
+use crate::features::{FindReplace, Settings, Theme, UndoManager};
 use crate::platform;
 use crate::ui::{MenuBarState, TabBar};
 use egui::{Event, Key, TextEdit};
@@ -12,6 +12,7 @@ pub struct TextEditAppState {
     pub tab_bar: TabBar,
     pub settings: Settings,
     pub theme: Theme,
+    pub find_replace: FindReplace,
     pub menu_state: MenuBarState,
     pub show_status_bar: bool,
     pub show_line_numbers: bool,
@@ -32,6 +33,7 @@ impl Default for TextEditAppState {
             tab_bar,
             settings,
             theme: Theme::default(),
+            find_replace: FindReplace::default(),
             menu_state: MenuBarState::default(),
             show_status_bar: true,
             show_line_numbers: true,
@@ -164,13 +166,25 @@ impl TextEditAppState {
 
     pub fn cut(&mut self) {
         self.copy();
+        // After copy, delete the selection
+        if let Some(doc) = self.get_current_doc() {
+            let mut doc = doc.write();
+            let text = doc.buffer.get_text();
+            // For now, just mark as modified
+            doc.buffer.set_modified(true);
+        }
     }
 
     pub fn copy(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use std::process::Command;
-            let _ = Command::new("pbcopy").output();
+        if let Some(doc) = self.get_current_doc() {
+            let doc = doc.read();
+            let text = doc.buffer.get_text();
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                use std::process::Command;
+                let _ = Command::new("pbcopy").arg(&text).output();
+            }
         }
     }
 
@@ -178,12 +192,22 @@ impl TextEditAppState {
         #[cfg(not(target_arch = "wasm32"))]
         {
             use std::process::Command;
-            let _ = Command::new("pbpaste").output();
+            if let Ok(output) = Command::new("pbpaste").output() {
+                let text = String::from_utf8_lossy(&output.stdout).to_string();
+                if let Some(doc) = self.get_current_doc() {
+                    let mut doc = doc.write();
+                    let current_text = doc.buffer.get_text();
+                    let new_text = format!("{}{}", current_text, text);
+                    doc.buffer = TextBuffer::from_string(&new_text);
+                    doc.buffer.set_modified(true);
+                }
+            }
         }
     }
 
     pub fn select_all(&mut self) {
-        // Select all text in current document
+        // Select all text - the text is already selected in the TextEdit widget
+        // This is handled by egui's TextEdit internally
     }
 
     pub fn get_current_doc(&self) -> Option<Arc<RwLock<Document>>> {
@@ -250,15 +274,17 @@ impl eframe::App for TextEditApp {
 
                 let mut text_edit = TextEdit::multiline(&mut text)
                     .code_editor()
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(20);
+                    .desired_width(ui.available_width());
 
-                ui.add(text_edit);
+                let response = ui.add_sized(ui.available_size(), text_edit);
 
-                if let Some(d) = self.state.get_current_doc() {
-                    let mut d = d.write();
-                    if d.buffer.get_text() != text {
-                        d.buffer = TextBuffer::from_string(&text);
+                // Update document if text changed
+                if response.changed() {
+                    if let Some(d) = self.state.get_current_doc() {
+                        let mut d = d.write();
+                        if d.buffer.get_text() != text {
+                            d.buffer = TextBuffer::from_string(&text);
+                        }
                     }
                 }
             } else {
@@ -287,10 +313,15 @@ impl eframe::App for TextEditApp {
                 });
         }
 
-        // Find dialog disabled for now
-        // if self.state.menu_state.show_find {
-        //     self.show_find_dialog(ctx);
-        // }
+        // Show Find/Replace dialog
+        if self.state.menu_state.show_find {
+            self.show_find_replace_dialog(ctx);
+        }
+
+        // Show Go to Line dialog
+        if self.state.menu_state.show_goto {
+            self.show_goto_line_dialog(ctx);
+        }
 
         self.handle_shortcuts(ctx);
     }
@@ -352,5 +383,146 @@ impl TextEditApp {
                 }
             }
         });
+    }
+
+    fn show_find_replace_dialog(&mut self, ctx: &egui::Context) {
+        let mut is_open = self.state.menu_state.show_find;
+        let mut is_replace_mode = self.state.menu_state.show_replace;
+
+        egui::Window::new("Find / Replace")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, -100.0])
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut is_open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Find:");
+                    ui.text_edit_singleline(&mut self.state.find_replace.search_text);
+                });
+
+                if is_replace_mode {
+                    ui.horizontal(|ui| {
+                        ui.label("Replace:");
+                        ui.text_edit_singleline(&mut self.state.find_replace.replace_text);
+                    });
+                }
+
+                ui.horizontal(|ui| {
+                    ui.checkbox(
+                        &mut self.state.find_replace.case_sensitive,
+                        "Case sensitive",
+                    );
+                    ui.checkbox(&mut self.state.find_replace.whole_word, "Whole word");
+                    ui.checkbox(&mut self.state.find_replace.regex, "Regex");
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Find Next").clicked() {
+                        self.find_next();
+                    }
+
+                    if is_replace_mode {
+                        if ui.button("Replace").clicked() {
+                            self.replace_next();
+                        }
+                        if ui.button("Replace All").clicked() {
+                            self.replace_all();
+                        }
+                    }
+
+                    ui.toggle_value(&mut is_replace_mode, "Replace");
+                });
+
+                ui.separator();
+
+                // Show match count
+                if let Some(doc) = self.state.get_current_doc() {
+                    let doc = doc.read();
+                    let text = doc.buffer.get_text();
+                    let count = self.state.find_replace.count_matches(&text);
+                    ui.label(format!("Matches: {}", count));
+                }
+
+                ui.separator();
+
+                if ui.button("Close").clicked() {
+                    self.state.menu_state.show_find = false;
+                    self.state.menu_state.show_replace = false;
+                }
+            });
+
+        self.state.menu_state.show_find = is_open;
+        self.state.menu_state.show_replace = is_replace_mode;
+    }
+
+    fn show_goto_line_dialog(&mut self, ctx: &egui::Context) {
+        let mut is_open = self.state.menu_state.show_goto;
+        let mut line_number = String::new();
+
+        egui::Window::new("Go to Line")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, -50.0])
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut is_open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Line number:");
+                    ui.text_edit_singleline(&mut line_number);
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Go to").clicked() {
+                        if let Ok(line) = line_number.parse::<usize>() {
+                            self.goto_line(line.saturating_sub(1)); // Convert to 0-indexed
+                            self.state.menu_state.show_goto = false;
+                        }
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.state.menu_state.show_goto = false;
+                    }
+                });
+            });
+
+        self.state.menu_state.show_goto = is_open;
+    }
+
+    fn find_next(&mut self) {
+        if let Some(doc) = self.state.get_current_doc() {
+            let doc = doc.read();
+            let text = doc.buffer.get_text();
+            let cursor_offset = 0; // Start from beginning for now
+
+            if let Some((start, _end)) = self.state.find_replace.find_next(&text, cursor_offset) {
+                log::info!("Found at position: {}", start);
+                // TODO: Scroll to and highlight the match
+            }
+        }
+    }
+
+    fn replace_next(&mut self) {
+        if let Some(doc) = self.state.get_current_doc() {
+            let mut doc = doc.write();
+            let text = doc.buffer.get_text();
+
+            if let Some((start, end)) = self.state.find_replace.find_next(&text, 0) {
+                let new_text = self.state.find_replace.replace_match(&text, (start, end));
+                doc.buffer = TextBuffer::from_string(&new_text);
+            }
+        }
+    }
+
+    fn replace_all(&mut self) {
+        if let Some(doc) = self.state.get_current_doc() {
+            let mut doc = doc.write();
+            let text = doc.buffer.get_text();
+            let new_text = self.state.find_replace.replace(&text);
+            doc.buffer = TextBuffer::from_string(&new_text);
+        }
+    }
+
+    fn goto_line(&self, line: usize) {
+        // Update cursor position to go to the specified line
+        // This would require cursor state management
+        log::info!("Going to line: {}", line + 1);
     }
 }

@@ -22,6 +22,32 @@ pub fn file_menu_button(ui: &mut Ui, app: &mut TextEditAppState) -> Response {
             ui.close();
         }
         ui.separator();
+
+        // Recent Files submenu
+        let recent_files: Vec<String> = app.settings.recent_files.iter().cloned().collect();
+        if !recent_files.is_empty() {
+            ui.menu_button("Recent Files", |ui| {
+                for (i, path) in recent_files.iter().take(10).enumerate() {
+                    let file_name = std::path::Path::new(path)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path.clone());
+
+                    let path_clone = path.clone();
+                    if ui.button(format!("{}. {}", i + 1, file_name)).clicked() {
+                        app.open_file(std::path::PathBuf::from(path_clone));
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                if ui.button("Clear Recent Files").clicked() {
+                    app.settings.recent_files.clear();
+                    ui.close();
+                }
+            });
+        }
+
+        ui.separator();
         if ui.button("Save").clicked() {
             app.save_current_file();
             ui.close();
