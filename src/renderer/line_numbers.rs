@@ -15,18 +15,24 @@ impl LineNumbersGeometry {
         }
     }
 
-    /// Build geometry for rendering line numbers with word wrapping support
+    /// Build geometry for rendering line numbers with word wrapping support and scrolling.
     pub fn build_with_wrap(
         total_lines: usize,
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
         wrapped_text: &WrappedText,
+        scroll_offset: usize,
     ) -> Result<Self, String> {
         let mut geometry = LineNumbersGeometry::new();
 
-        let visible_lines = layout
-            .visible_lines()
-            .min(wrapped_text.total_visual_lines.max(1));
+        if wrapped_text.wrapped_lines.is_empty() {
+            return Ok(geometry);
+        }
+
+        let visible_lines = layout.visible_lines().max(1);
+        let total_visual = wrapped_text.total_visual_lines.max(1);
+        let first_visual = scroll_offset.min(total_visual.saturating_sub(1));
+        let last_visual = (first_visual + visible_lines).min(total_visual);
         let max_digits = total_lines.max(1).to_string().len();
 
         let ascent = glyph_atlas.ascent();
@@ -34,12 +40,11 @@ impl LineNumbersGeometry {
         // Track which logical lines we've already rendered
         let mut rendered_logical_lines = Vec::new();
 
-        for visual_line in 0..visible_lines {
-            if visual_line >= wrapped_text.wrapped_lines.len() {
-                break;
+        for wrapped in &wrapped_text.wrapped_lines {
+            let visual_line = wrapped.visual_line;
+            if visual_line < first_visual || visual_line >= last_visual {
+                continue;
             }
-
-            let wrapped = &wrapped_text.wrapped_lines[visual_line];
 
             // Only show line number for the first visual line of each logical line
             if rendered_logical_lines.contains(&wrapped.logical_line) {
@@ -52,8 +57,10 @@ impl LineNumbersGeometry {
 
             let text_width: f32 = line_str.len() as f32 * layout.char_width;
             let base_x = layout.gutter.width - layout.line_number_padding_right - text_width;
-            let baseline_y =
-                layout.text_area_padding_top + (visual_line as f32 * layout.line_height) + ascent;
+            let screen_line = visual_line.saturating_sub(first_visual);
+            let baseline_y = layout.text_area_padding_top
+                + (screen_line as f32 * layout.line_height)
+                + ascent;
 
             let mut x_offset = 0.0;
 

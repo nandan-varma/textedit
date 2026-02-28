@@ -6,3 +6,4 @@ pub mod status_bar;
 pub mod text;
 pub mod text_geometry;
 pub mod ui_background;
+pub mod scrollbar;

@@ -1,15 +1,16 @@
-use std::sync::Arc;
-use winit::window::Window;
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration, RenderPipeline, BindGroup};
-use wgpu::util::DeviceExt;
-use crate::renderer::glyph_cache::GlyphAtlas;
-use crate::renderer::text_geometry::{TextGeometry, WrappedText};
-use crate::renderer::cursor::CursorGeometry;
-use crate::renderer::line_numbers::LineNumbersGeometry;
-use crate::renderer::status_bar::StatusBarGeometry;
-use crate::renderer::ui_background::UIBackgroundGeometry;
-use crate::renderer::layout::{EditorLayout, Colors};
 use crate::editor::{Buffer, Cursor};
+use crate::renderer::cursor::CursorGeometry;
+use crate::renderer::glyph_cache::GlyphAtlas;
+use crate::renderer::layout::{Colors, EditorLayout};
+use crate::renderer::line_numbers::LineNumbersGeometry;
+use crate::renderer::scrollbar::ScrollbarGeometry;
+use crate::renderer::status_bar::StatusBarGeometry;
+use crate::renderer::text_geometry::{TextGeometry, WrappedText};
+use crate::renderer::ui_background::UIBackgroundGeometry;
+use std::sync::Arc;
+use wgpu::util::DeviceExt;
+use wgpu::{BindGroup, Device, Queue, RenderPipeline, Surface, SurfaceConfiguration};
+use winit::window::Window;
 
 const GLYPH_ATLAS_SIZE: u32 = 1024;
 const BASE_FONT_SIZE: f32 = 14.0;
@@ -20,45 +21,54 @@ pub struct State {
     pub queue: Queue,
     config: SurfaceConfiguration,
     window: Arc<Window>,
-    
+
     // Scaling
     scale_factor: f32,
     scaled_font_size: f32,
-    
+
+    // Scrolling
+    scroll_visual_offset: usize,
+    total_visual_lines: usize,
+
     // Pipelines
     text_pipeline: Option<RenderPipeline>,
     color_pipeline: Option<RenderPipeline>,
-    
+
     // Glyph atlas
     glyph_atlas: Option<GlyphAtlas>,
     atlas_texture: Option<wgpu::Texture>,
     atlas_bind_group: Option<BindGroup>,
     bind_group_layout: Option<wgpu::BindGroupLayout>,
-    
+
     // UI Background buffers
     ui_bg_vertex_buffer: Option<wgpu::Buffer>,
     ui_bg_index_buffer: Option<wgpu::Buffer>,
     ui_bg_index_count: u32,
-    
+
     // Text buffers
     text_vertex_buffer: Option<wgpu::Buffer>,
     text_index_buffer: Option<wgpu::Buffer>,
     text_index_count: u32,
-    
+
     // Line numbers buffers
     line_numbers_vertex_buffer: Option<wgpu::Buffer>,
     line_numbers_index_buffer: Option<wgpu::Buffer>,
     line_numbers_index_count: u32,
-    
+
     // Status bar buffers
     status_bar_vertex_buffer: Option<wgpu::Buffer>,
     status_bar_index_buffer: Option<wgpu::Buffer>,
     status_bar_index_count: u32,
-    
+
     // Cursor buffers
     cursor_vertex_buffer: Option<wgpu::Buffer>,
     cursor_index_buffer: Option<wgpu::Buffer>,
     cursor_index_count: u32,
+
+    // Scrollbar buffers
+    scrollbar_vertex_buffer: Option<wgpu::Buffer>,
+    scrollbar_index_buffer: Option<wgpu::Buffer>,
+    scrollbar_index_count: u32,
 }
 
 impl State {
@@ -115,8 +125,13 @@ impl State {
 
         // Load system font with scaled font size
         let font_data = Self::load_system_font()?;
-        let glyph_atlas = GlyphAtlas::new(&font_data, scaled_font_size, GLYPH_ATLAS_SIZE, GLYPH_ATLAS_SIZE)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let glyph_atlas = GlyphAtlas::new(
+            &font_data,
+            scaled_font_size,
+            GLYPH_ATLAS_SIZE,
+            GLYPH_ATLAS_SIZE,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Create atlas texture
         let atlas_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -198,7 +213,7 @@ impl State {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(
-                        &atlas_texture.create_view(&wgpu::TextureViewDescriptor::default())
+                        &atlas_texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
                 },
                 wgpu::BindGroupEntry {
@@ -220,6 +235,8 @@ impl State {
             window,
             scale_factor,
             scaled_font_size,
+            scroll_visual_offset: 0,
+            total_visual_lines: 0,
             text_pipeline: Some(text_pipeline),
             color_pipeline: Some(color_pipeline),
             glyph_atlas: Some(glyph_atlas),
@@ -241,6 +258,9 @@ impl State {
             cursor_vertex_buffer: None,
             cursor_index_buffer: None,
             cursor_index_count: 0,
+            scrollbar_vertex_buffer: None,
+            scrollbar_index_buffer: None,
+            scrollbar_index_count: 0,
         })
     }
 
@@ -255,7 +275,9 @@ impl State {
         #[cfg(target_os = "linux")]
         {
             std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
-                .or_else(|_| std::fs::read("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf"))
+                .or_else(|_| {
+                    std::fs::read("/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf")
+                })
                 .map_err(|e| anyhow::anyhow!("Failed to load system font: {}", e))
         }
         #[cfg(target_os = "windows")]
@@ -273,7 +295,9 @@ impl State {
     ) -> RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("text shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("renderer/text.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "renderer/text.wgsl"
+            ))),
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -327,13 +351,12 @@ impl State {
         })
     }
 
-    fn create_color_pipeline(
-        device: &Device,
-        format: wgpu::TextureFormat,
-    ) -> RenderPipeline {
+    fn create_color_pipeline(device: &Device, format: wgpu::TextureFormat) -> RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("color shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("renderer/cursor.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "renderer/cursor.wgsl"
+            ))),
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -387,12 +410,18 @@ impl State {
         })
     }
 
-    pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor, show_line_numbers: bool, show_status_bar: bool) -> anyhow::Result<()> {
+    pub fn update_geometry(
+        &mut self,
+        buffer: &Buffer,
+        cursor: &Cursor,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) -> anyhow::Result<()> {
         let size = self.window.inner_size();
         let layout = EditorLayout::new(
-            size.width as f32, 
-            size.height as f32, 
-            self.scaled_font_size, 
+            size.width as f32,
+            size.height as f32,
+            self.scaled_font_size,
             self.scale_factor,
             show_line_numbers,
             show_status_bar,
@@ -401,79 +430,117 @@ impl State {
         // Update UI backgrounds
         let ui_bg = UIBackgroundGeometry::build(&layout);
         if !ui_bg.vertices.is_empty() {
-            self.ui_bg_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("ui bg vertex buffer"),
-                contents: bytemuck::cast_slice(&ui_bg.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
-            self.ui_bg_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("ui bg index buffer"),
-                contents: bytemuck::cast_slice(&ui_bg.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            }));
+            self.ui_bg_vertex_buffer = Some(self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("ui bg vertex buffer"),
+                    contents: bytemuck::cast_slice(&ui_bg.vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                },
+            ));
+            self.ui_bg_index_buffer = Some(self.device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("ui bg index buffer"),
+                    contents: bytemuck::cast_slice(&ui_bg.indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                },
+            ));
             self.ui_bg_index_count = ui_bg.indices.len() as u32;
         }
 
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
             // Compute wrapped text for rendering and cursor positioning
             let wrapped_text = WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
-            
+
+            // Update scrolling state based on total visual lines
+            self.total_visual_lines = wrapped_text.total_visual_lines;
+            let visible_lines = layout.visible_lines().max(1);
+            if self.total_visual_lines > visible_lines {
+                let max_offset = self.total_visual_lines.saturating_sub(visible_lines);
+                self.scroll_visual_offset = self.scroll_visual_offset.min(max_offset);
+            } else {
+                self.scroll_visual_offset = 0;
+            }
+
             // Update text geometry
-            let text_geometry = TextGeometry::build_from_buffer(buffer, glyph_atlas, &layout)
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let text_geometry = TextGeometry::build_from_buffer(
+                buffer,
+                glyph_atlas,
+                &layout,
+                &wrapped_text,
+                self.scroll_visual_offset,
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !text_geometry.vertices.is_empty() {
-                self.text_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("text vertex buffer"),
-                    contents: bytemuck::cast_slice(&text_geometry.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }));
-                self.text_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("text index buffer"),
-                    contents: bytemuck::cast_slice(&text_geometry.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                }));
+                self.text_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("text vertex buffer"),
+                        contents: bytemuck::cast_slice(&text_geometry.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.text_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("text index buffer"),
+                        contents: bytemuck::cast_slice(&text_geometry.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
                 self.text_index_count = text_geometry.indices.len() as u32;
             } else {
                 self.text_index_count = 0;
             }
 
-            // Update line numbers with wrapped text info
+            // Update line numbers with wrapped text info and scrolling
             let total_lines = buffer.len_lines();
-            let line_nums = LineNumbersGeometry::build_with_wrap(total_lines, glyph_atlas, &layout, &wrapped_text)
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let line_nums = LineNumbersGeometry::build_with_wrap(
+                total_lines,
+                glyph_atlas,
+                &layout,
+                &wrapped_text,
+                self.scroll_visual_offset,
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !line_nums.vertices.is_empty() {
-                self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("line numbers vertex buffer"),
-                    contents: bytemuck::cast_slice(&line_nums.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }));
-                self.line_numbers_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("line numbers index buffer"),
-                    contents: bytemuck::cast_slice(&line_nums.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                }));
+                self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("line numbers vertex buffer"),
+                        contents: bytemuck::cast_slice(&line_nums.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.line_numbers_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("line numbers index buffer"),
+                        contents: bytemuck::cast_slice(&line_nums.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
                 self.line_numbers_index_count = line_nums.indices.len() as u32;
             } else {
                 self.line_numbers_index_count = 0;
             }
 
-            // Update status bar
+            // Update status bar (independent of scrolling)
             let status_bar = StatusBarGeometry::build(cursor, buffer, glyph_atlas, &layout)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !status_bar.vertices.is_empty() {
-                self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("status bar vertex buffer"),
-                    contents: bytemuck::cast_slice(&status_bar.vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }));
-                self.status_bar_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("status bar index buffer"),
-                    contents: bytemuck::cast_slice(&status_bar.indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                }));
+                self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("status bar vertex buffer"),
+                        contents: bytemuck::cast_slice(&status_bar.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.status_bar_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("status bar index buffer"),
+                        contents: bytemuck::cast_slice(&status_bar.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
                 self.status_bar_index_count = status_bar.indices.len() as u32;
             } else {
                 self.status_bar_index_count = 0;
@@ -503,20 +570,61 @@ impl State {
             }
         }
 
-        // Update cursor with wrapped text info
-        let cursor_geom = CursorGeometry::build_with_wrap(cursor, buffer, &layout, &mut self.glyph_atlas.as_mut().unwrap());
-        if !cursor_geom.vertices.is_empty() {
-            self.cursor_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("cursor vertex buffer"),
-                contents: bytemuck::cast_slice(&cursor_geom.vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            }));
-            self.cursor_index_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("cursor index buffer"),
-                contents: bytemuck::cast_slice(&cursor_geom.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            }));
-            self.cursor_index_count = cursor_geom.indices.len() as u32;
+        // Update cursor, selection, and scrollbar geometry using current scrolling state
+        if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            let cursor_geom = CursorGeometry::build_with_wrap(
+                cursor,
+                buffer,
+                &layout,
+                glyph_atlas,
+                self.scroll_visual_offset,
+            );
+            if !cursor_geom.vertices.is_empty() {
+                self.cursor_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("cursor vertex buffer"),
+                        contents: bytemuck::cast_slice(&cursor_geom.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.cursor_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("cursor index buffer"),
+                        contents: bytemuck::cast_slice(&cursor_geom.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
+                self.cursor_index_count = cursor_geom.indices.len() as u32;
+            } else {
+                self.cursor_index_count = 0;
+            }
+
+            let visible_lines = layout.visible_lines().max(1);
+            let scrollbar = ScrollbarGeometry::build(
+                &layout,
+                self.total_visual_lines,
+                visible_lines,
+                self.scroll_visual_offset,
+            );
+            if !scrollbar.vertices.is_empty() {
+                self.scrollbar_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("scrollbar vertex buffer"),
+                        contents: bytemuck::cast_slice(&scrollbar.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.scrollbar_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("scrollbar index buffer"),
+                        contents: bytemuck::cast_slice(&scrollbar.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
+                self.scrollbar_index_count = scrollbar.indices.len() as u32;
+            } else {
+                self.scrollbar_index_count = 0;
+            }
         }
 
         Ok(())
@@ -527,6 +635,10 @@ impl State {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
+
+            // Reset scroll when the viewport size changes significantly; the next
+            // `update_geometry` call will clamp it based on new visible line count.
+            self.scroll_visual_offset = 0;
         }
     }
 
@@ -539,11 +651,17 @@ impl State {
 
         self.scale_factor = new_scale;
         self.scaled_font_size = BASE_FONT_SIZE * new_scale;
+        self.scroll_visual_offset = 0;
 
         // Recreate glyph atlas with new font size
         let font_data = Self::load_system_font()?;
-        let glyph_atlas = GlyphAtlas::new(&font_data, self.scaled_font_size, GLYPH_ATLAS_SIZE, GLYPH_ATLAS_SIZE)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let glyph_atlas = GlyphAtlas::new(
+            &font_data,
+            self.scaled_font_size,
+            GLYPH_ATLAS_SIZE,
+            GLYPH_ATLAS_SIZE,
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Upload new atlas data
         if let Some(atlas_texture) = &self.atlas_texture {
@@ -574,11 +692,15 @@ impl State {
 
     pub fn render(&mut self) -> anyhow::Result<()> {
         let output = self.surface.get_current_texture()?;
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("render encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("render encoder"),
+            });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -604,7 +726,8 @@ impl State {
             // 1. Render UI backgrounds (gutter, status bar)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
-                if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer) {
+                if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer)
+                {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.ui_bg_index_count, 0, 0..1);
@@ -630,7 +753,10 @@ impl State {
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
-                if let (Some(vb), Some(ib)) = (&self.line_numbers_vertex_buffer, &self.line_numbers_index_buffer) {
+                if let (Some(vb), Some(ib)) = (
+                    &self.line_numbers_vertex_buffer,
+                    &self.line_numbers_index_buffer,
+                ) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.line_numbers_index_count, 0, 0..1);
@@ -643,7 +769,10 @@ impl State {
                 if let Some(bind_group) = &self.atlas_bind_group {
                     render_pass.set_bind_group(0, bind_group, &[]);
                 }
-                if let (Some(vb), Some(ib)) = (&self.status_bar_vertex_buffer, &self.status_bar_index_buffer) {
+                if let (Some(vb), Some(ib)) = (
+                    &self.status_bar_vertex_buffer,
+                    &self.status_bar_index_buffer,
+                ) {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.status_bar_index_count, 0, 0..1);
@@ -653,7 +782,19 @@ impl State {
             // 5. Render cursor (on top)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
-                if let (Some(vb), Some(ib)) = (&self.cursor_vertex_buffer, &self.cursor_index_buffer) {
+                // Scrollbar
+                if let (Some(vb), Some(ib)) =
+                    (&self.scrollbar_vertex_buffer, &self.scrollbar_index_buffer)
+                {
+                    render_pass.set_vertex_buffer(0, vb.slice(..));
+                    render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..self.scrollbar_index_count, 0, 0..1);
+                }
+
+                // Cursor and selection
+                if let (Some(vb), Some(ib)) =
+                    (&self.cursor_vertex_buffer, &self.cursor_index_buffer)
+                {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
@@ -669,6 +810,92 @@ impl State {
 
     pub fn window(&self) -> &Arc<Window> {
         &self.window
+    }
+
+    /// Scroll vertically by the given number of visual lines.
+    ///
+    /// Positive values scroll down, negative values scroll up.
+    pub fn scroll_by_lines(
+        &mut self,
+        delta_lines: i32,
+        buffer: &Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) {
+        let size = self.window.inner_size();
+        let layout = EditorLayout::new(
+            size.width as f32,
+            size.height as f32,
+            self.scaled_font_size,
+            self.scale_factor,
+            show_line_numbers,
+            show_status_bar,
+        );
+
+        if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            let wrapped_text = WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            self.total_visual_lines = wrapped_text.total_visual_lines;
+
+            let visible = layout.visible_lines().max(1);
+            if self.total_visual_lines <= visible {
+                self.scroll_visual_offset = 0;
+                return;
+            }
+
+            let max_offset = self.total_visual_lines.saturating_sub(visible) as i32;
+            let current = self.scroll_visual_offset as i32;
+            let mut next = current + delta_lines;
+            if next < 0 {
+                next = 0;
+            } else if next > max_offset {
+                next = max_offset;
+            }
+            self.scroll_visual_offset = next as usize;
+        }
+    }
+
+    /// Adjust scroll offset so that the cursor's visual line is within the viewport.
+    pub fn ensure_cursor_visible(
+        &mut self,
+        cursor: &Cursor,
+        buffer: &Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) {
+        let size = self.window.inner_size();
+        let layout = EditorLayout::new(
+            size.width as f32,
+            size.height as f32,
+            self.scaled_font_size,
+            self.scale_factor,
+            show_line_numbers,
+            show_status_bar,
+        );
+
+        if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            let wrapped_text = WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            self.total_visual_lines = wrapped_text.total_visual_lines;
+
+            let visible = layout.visible_lines().max(1);
+            if self.total_visual_lines == 0 || visible == 0 {
+                self.scroll_visual_offset = 0;
+                return;
+            }
+
+            let (logical_line, col) = buffer.char_to_line_col(cursor.position());
+            let (visual_line, _) = wrapped_text.get_visual_position(logical_line, col, buffer);
+
+            let max_offset = self.total_visual_lines.saturating_sub(visible);
+            let mut offset = self.scroll_visual_offset.min(max_offset);
+
+            if visual_line < offset {
+                offset = visual_line;
+            } else if visual_line >= offset + visible {
+                offset = visual_line.saturating_sub(visible.saturating_sub(1));
+            }
+
+            self.scroll_visual_offset = offset.min(max_offset);
+        }
     }
 
     /// Get character index at pixel position (for mouse clicks).
@@ -696,7 +923,13 @@ impl State {
 
         if let Some(glyph_atlas) = &self.glyph_atlas {
             let mut atlas_clone = glyph_atlas.clone();
-            layout.hit_test(x as f32, y as f32, buffer, &mut atlas_clone)
+            layout.hit_test(
+                x as f32,
+                y as f32,
+                buffer,
+                &mut atlas_clone,
+                self.scroll_visual_offset,
+            )
         } else {
             None
         }

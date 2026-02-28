@@ -178,19 +178,34 @@ impl TextGeometry {
         }
     }
 
-    /// Build geometry for rendering text buffer with word wrapping
+    /// Build geometry for rendering text buffer with word wrapping and vertical scrolling.
+    ///
+    /// `wrapped_text` contains layout information for all visual lines.
+    /// `scroll_offset` is the index of the first visual line visible at the top of the viewport.
     pub fn build_from_buffer(
         buffer: &Buffer,
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
+        wrapped_text: &WrappedText,
+        scroll_offset: usize,
     ) -> Result<Self, String> {
         let mut geometry = TextGeometry::new();
 
-        // Calculate wrapped lines
-        let wrapped_text = WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
         let ascent = glyph_atlas.ascent();
 
+        if wrapped_text.wrapped_lines.is_empty() {
+            return Ok(geometry);
+        }
+
+        let visible_lines = layout.visible_lines().max(1);
+        let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
+        let last_visual = (first_visual + visible_lines).min(wrapped_text.total_visual_lines);
+
         for wrapped in &wrapped_text.wrapped_lines {
+            if wrapped.visual_line < first_visual || wrapped.visual_line >= last_visual {
+                continue;
+            }
+
             let lines = buffer.lines();
             if wrapped.logical_line >= lines.len() {
                 continue;
@@ -200,9 +215,9 @@ impl TextGeometry {
             let line_chars: Vec<char> = line.chars().collect();
 
             let base_x = layout.text_area.x + layout.text_area_padding_left;
-            let baseline_y = layout.text_area_padding_top
-                + (wrapped.visual_line as f32 * layout.line_height)
-                + ascent;
+            let screen_line = wrapped.visual_line.saturating_sub(first_visual);
+            let baseline_y =
+                layout.text_area_padding_top + (screen_line as f32 * layout.line_height) + ascent;
 
             let mut x_offset = 0.0;
 

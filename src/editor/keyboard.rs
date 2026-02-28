@@ -126,7 +126,7 @@ impl KeyboardController {
     fn handle_text_input(&mut self, editor: &mut Editor, text: &str) -> bool {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let (s,e) = sel.range();
+                let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
@@ -317,7 +317,7 @@ impl KeyboardController {
     fn handle_backspace(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let (s,e) = sel.range();
+                let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
@@ -351,7 +351,7 @@ impl KeyboardController {
     fn handle_delete(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let (s,e) = sel.range();
+                let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
@@ -416,7 +416,7 @@ impl Default for KeyboardController {
 
 fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
     if sel.len() > 0 {
-        let (s,e) = sel.range();
+        let (s, e) = sel.range();
         let text = editor
             .buffer()
             .as_str()
@@ -432,7 +432,7 @@ fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
 
 fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
     if sel.len() > 0 {
-        let (s,e) = sel.range();
+        let (s, e) = sel.range();
         let text = editor
             .buffer()
             .as_str()
@@ -445,10 +445,9 @@ fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
         }
         editor.buffer_mut().remove(s, e - s);
         editor.cursor_mut().set_position(s);
-        editor.history_mut().push(Operation::Delete {
-            position: s,
-            text,
-        });
+        editor
+            .history_mut()
+            .push(Operation::Delete { position: s, text });
     }
 }
 
@@ -457,7 +456,7 @@ fn paste_at_cursor(editor: &mut Editor) {
         if let Ok(text) = cb.get_text() {
             if let Some(sel) = editor.cursor().selection() {
                 if sel.len() > 0 {
-                    let (s,e) = sel.range();
+                    let (s, e) = sel.range();
                     let txt = editor
                         .buffer()
                         .as_str()

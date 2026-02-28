@@ -223,7 +223,7 @@ impl App {
 
     fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
         if sel.len() > 0 {
-            let (s,e) = sel.range();
+            let (s, e) = sel.range();
             let text = editor
                 .buffer()
                 .as_str()
@@ -239,7 +239,7 @@ impl App {
 
     fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
         if sel.len() > 0 {
-            let (s,e) = sel.range();
+            let (s, e) = sel.range();
             let text = editor
                 .buffer()
                 .as_str()
@@ -254,10 +254,7 @@ impl App {
             editor.cursor_mut().set_position(s);
             editor
                 .history_mut()
-                .push(crate::editor::operations::Operation::Delete {
-                    position: s,
-                    text,
-                });
+                .push(crate::editor::operations::Operation::Delete { position: s, text });
         }
     }
 
@@ -266,7 +263,7 @@ impl App {
             if let Ok(text) = clipboard.get_text() {
                 if let Some(sel) = editor.cursor().selection() {
                     if sel.len() > 0 {
-                        let (s,e) = sel.range();
+                        let (s, e) = sel.range();
                         let txt = editor
                             .buffer()
                             .as_str()
@@ -303,7 +300,7 @@ impl App {
 
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let (s,e) = sel.range();
+                let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
@@ -470,6 +467,44 @@ impl ApplicationHandler<MenuAction> for App {
                     };
                 }
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                use winit::event::MouseScrollDelta;
+
+                if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                    let lines_delta: i32 = match delta {
+                        MouseScrollDelta::LineDelta(_, y) => {
+                            // Positive y is typically scroll up.
+                            -(y.round() as i32)
+                        }
+                        MouseScrollDelta::PixelDelta(pos) => {
+                            if pos.y > 0.0 {
+                                -3
+                            } else if pos.y < 0.0 {
+                                3
+                            } else {
+                                0
+                            }
+                        }
+                    };
+
+                    if lines_delta != 0 {
+                        state.scroll_by_lines(
+                            lines_delta,
+                            editor.buffer(),
+                            editor.show_line_numbers(),
+                            editor.show_status_bar(),
+                        );
+                        if let Err(e) = state.update_geometry(
+                            editor.buffer(),
+                            editor.cursor(),
+                            editor.show_line_numbers(),
+                            editor.show_status_bar(),
+                        ) {
+                            eprintln!("Failed to update geometry after scroll: {}", e);
+                        }
+                    }
+                }
+            }
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse_position = Some((position.x, position.y));
 
@@ -502,6 +537,15 @@ impl ApplicationHandler<MenuAction> for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                     self.keyboard.handle_key_event(editor, event);
+
+                    // Keep the cursor in view after keyboard navigation/editing.
+                    state.ensure_cursor_visible(
+                        editor.cursor(),
+                        editor.buffer(),
+                        editor.show_line_numbers(),
+                        editor.show_status_bar(),
+                    );
+
                     if let Err(e) = state.update_geometry(
                         editor.buffer(),
                         editor.cursor(),

@@ -22,19 +22,21 @@ impl CursorGeometry {
         }
     }
 
-    /// Build geometry for rendering cursor with selection highlighting
+    /// Build geometry for rendering cursor with selection highlighting and scrolling.
     pub fn build_with_wrap(
         cursor: &Cursor,
         buffer: &Buffer,
         layout: &EditorLayout,
         glyph_atlas: &mut GlyphAtlas,
+        scroll_offset: usize,
     ) -> Self {
         let mut geometry = CursorGeometry::new();
 
         // First, render selection background if there's a selection
         if let Some(sel) = cursor.selection() {
             if !sel.is_empty() {
-                geometry = Self::render_selection(cursor, buffer, layout, glyph_atlas, geometry);
+                geometry =
+                    Self::render_selection(cursor, buffer, layout, glyph_atlas, scroll_offset, geometry);
             }
         }
 
@@ -86,8 +88,12 @@ impl CursorGeometry {
                     x_pos += glyph_atlas.char_advance_width(ch);
                 }
 
+                let screen_line = visual_line.saturating_sub(
+                    scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1)),
+                );
                 let x = base_x + x_pos;
-                let y = layout.text_area_padding_top + (visual_line as f32 * layout.line_height);
+                let y =
+                    layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
 
                 let cursor_width = 2.0;
                 let cursor_height = layout.line_height;
@@ -137,6 +143,7 @@ impl CursorGeometry {
         buffer: &Buffer,
         layout: &EditorLayout,
         glyph_atlas: &mut GlyphAtlas,
+        scroll_offset: usize,
         mut geometry: Self,
     ) -> Self {
         let sel = cursor.selection().unwrap();
@@ -159,6 +166,12 @@ impl CursorGeometry {
             let wrapped_start = wrapped.start_char;
             let wrapped_end = wrapped.end_char;
             let visual_line = wrapped.visual_line;
+
+            let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
+            if visual_line < first_visual {
+                continue;
+            }
+            let screen_line = visual_line.saturating_sub(first_visual);
 
             // Get line content
             let lines = buffer.lines();
@@ -233,7 +246,8 @@ impl CursorGeometry {
             }
 
             let x = base_x + sel_start_x;
-            let y = layout.text_area_padding_top + (visual_line as f32 * layout.line_height);
+            let y =
+                layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
             let height = layout.line_height;
 
             let [x1, y1] = layout.pixel_to_ndc(x, y);
