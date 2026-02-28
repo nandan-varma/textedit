@@ -685,6 +685,10 @@ impl State {
         let rel_x = x as f32 - layout.text_area.x - layout.text_area_padding_left;
         let rel_y = y as f32 - layout.text_area_padding_top;
 
+        // Clamp to valid range
+        let rel_x = rel_x.max(0.0);
+        let rel_y = rel_y.max(0.0);
+        
         let visual_line = (rel_y / layout.line_height).floor() as usize;
         
         if let Some(glyph_atlas) = &self.glyph_atlas {
@@ -695,33 +699,53 @@ impl State {
                 &layout
             );
             
-            // Find which visual line we clicked on
-            if visual_line < wrapped_text.wrapped_lines.len() {
-                let wrapped = &wrapped_text.wrapped_lines[visual_line];
+            // Find which visual line we clicked on - clamp to valid range
+            let clamped_visual_line = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
+            
+            if let Some(wrapped) = wrapped_text.wrapped_lines.get(clamped_visual_line) {
                 let lines = buffer.lines();
                 
                 if wrapped.logical_line < lines.len() {
                     let line = &lines[wrapped.logical_line];
                     let line_chars: Vec<char> = line.chars().collect();
+                    let line_len = line_chars.len();
+                    
+                    // If line is empty, return start position
+                    if line_len == 0 {
+                        return (wrapped.logical_line, 0);
+                    }
                     
                     // Find character position based on x offset
                     let mut x_offset = 0.0;
-                    for (i, ch) in line_chars.iter().enumerate().skip(wrapped.start_char) {
-                        let advance = glyph_atlas_clone.char_advance_width(*ch);
-                        if x_offset + advance / 2.0 > rel_x {
-                            let char_idx = wrapped.start_char + i;
-                            return (wrapped.logical_line, char_idx.saturating_sub(wrapped.start_char));
+                    let chars_in_visual = wrapped.end_char - wrapped.start_char;
+                    
+                    for i in 0..chars_in_visual {
+                        let char_idx = wrapped.start_char + i;
+                        if char_idx >= line_len {
+                            break;
+                        }
+                        let ch = line_chars[char_idx];
+                        let advance = glyph_atlas_clone.char_advance_width(ch);
+                        
+                        // Click in first half of character = click before character
+                        // Click in second half = click after character
+                        let char_center = x_offset + advance / 2.0;
+                        if rel_x < char_center {
+                            return (wrapped.logical_line, char_idx);
                         }
                         x_offset += advance;
                     }
                     
-                    // Click past end of line
-                    let col = line_chars.len().saturating_sub(wrapped.start_char);
+                    // Click past end of line - return position after last character
+                    let col = line_len;
                     return (wrapped.logical_line, col);
                 }
             }
         }
 
-        (0, 0)
+        // Click outside valid area - return end of last line
+        let last_line = buffer.len_lines().saturating_sub(1);
+        let last_col = buffer.line(last_line).map(|l| l.chars().count()).unwrap_or(0);
+        (last_line, last_col)
     }
 }

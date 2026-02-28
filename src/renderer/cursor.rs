@@ -49,62 +49,72 @@ impl CursorGeometry {
         let base_x = layout.text_area.x + layout.text_area_padding_left;
 
         let lines = buffer.lines();
-        if logical_line < lines.len() {
-            let line = &lines[logical_line];
-            let line_chars: Vec<char> = line.chars().collect();
 
-            let mut x_pos = 0.0;
-            let start_char = wrapped_text
-                .wrapped_lines
-                .iter()
-                .find(|w| w.logical_line == logical_line && w.visual_line == visual_line)
-                .map(|w| w.start_char)
-                .unwrap_or(0);
+        // Find the wrapped line that contains our cursor position
+        let wrapped_opt = wrapped_text
+            .wrapped_lines
+            .iter()
+            .find(|w| w.logical_line == logical_line && w.visual_line == visual_line);
 
-            for ch in line_chars.iter().skip(start_char).take(visual_col) {
-                x_pos += glyph_atlas.char_advance_width(*ch);
+        if let Some(wrapped) = wrapped_opt {
+            if logical_line < lines.len() {
+                let line = &lines[logical_line];
+                let line_chars: Vec<char> = line.chars().collect();
+
+                // Calculate x position - only count characters from start of this visual line
+                let mut x_pos = 0.0;
+                let chars_in_visual = (wrapped.end_char - wrapped.start_char).min(visual_col);
+
+                for i in 0..chars_in_visual {
+                    let char_idx = wrapped.start_char + i;
+                    if char_idx >= line_chars.len() {
+                        break;
+                    }
+                    let ch = line_chars[char_idx];
+                    x_pos += glyph_atlas.char_advance_width(ch);
+                }
+
+                let x = base_x + x_pos;
+                let y = layout.text_area_padding_top + (visual_line as f32 * layout.line_height);
+
+                let cursor_width = 2.0;
+                let cursor_height = layout.line_height;
+
+                let [x1, y1] = layout.pixel_to_ndc(x, y);
+                let [x2, y2] = layout.pixel_to_ndc(x + cursor_width, y + cursor_height);
+
+                let color = Colors::CURSOR_COLOR;
+
+                let base_vertex = geometry.vertices.len() as u32;
+
+                geometry.vertices.push(CursorVertex {
+                    position: [x1, y1],
+                    color,
+                });
+
+                geometry.vertices.push(CursorVertex {
+                    position: [x2, y1],
+                    color,
+                });
+
+                geometry.vertices.push(CursorVertex {
+                    position: [x2, y2],
+                    color,
+                });
+
+                geometry.vertices.push(CursorVertex {
+                    position: [x1, y2],
+                    color,
+                });
+
+                geometry.indices.push(base_vertex);
+                geometry.indices.push(base_vertex + 1);
+                geometry.indices.push(base_vertex + 2);
+
+                geometry.indices.push(base_vertex);
+                geometry.indices.push(base_vertex + 2);
+                geometry.indices.push(base_vertex + 3);
             }
-
-            let x = base_x + x_pos;
-            let y = layout.text_area_padding_top + (visual_line as f32 * layout.line_height);
-
-            let cursor_width = 2.0;
-            let cursor_height = layout.line_height;
-
-            let [x1, y1] = layout.pixel_to_ndc(x, y);
-            let [x2, y2] = layout.pixel_to_ndc(x + cursor_width, y + cursor_height);
-
-            let color = Colors::CURSOR_COLOR;
-
-            let base_vertex = geometry.vertices.len() as u32;
-
-            geometry.vertices.push(CursorVertex {
-                position: [x1, y1],
-                color,
-            });
-
-            geometry.vertices.push(CursorVertex {
-                position: [x2, y1],
-                color,
-            });
-
-            geometry.vertices.push(CursorVertex {
-                position: [x2, y2],
-                color,
-            });
-
-            geometry.vertices.push(CursorVertex {
-                position: [x1, y2],
-                color,
-            });
-
-            geometry.indices.push(base_vertex);
-            geometry.indices.push(base_vertex + 1);
-            geometry.indices.push(base_vertex + 2);
-
-            geometry.indices.push(base_vertex);
-            geometry.indices.push(base_vertex + 2);
-            geometry.indices.push(base_vertex + 3);
         }
 
         geometry
@@ -121,6 +131,7 @@ impl CursorGeometry {
         let start = sel.start.min(sel.end);
         let end = sel.start.max(sel.end);
 
+        // Get character positions
         let (start_line, start_col) = buffer.char_to_line_col(start);
         let (end_line, end_col) = buffer.char_to_line_col(end);
 
@@ -132,92 +143,121 @@ impl CursorGeometry {
 
         // Find all visual lines that intersect with the selection
         for wrapped in &wrapped_text.wrapped_lines {
-            // Check if this visual line intersects with selection
-            let line_start_char = wrapped.start_char;
-            let line_end_char = wrapped.end_char;
+            let wrapped_logical = wrapped.logical_line;
+            let wrapped_start = wrapped.start_char;
+            let wrapped_end = wrapped.end_char;
+            let visual_line = wrapped.visual_line;
 
-            // Get logical line for this visual line
+            // Get line content
             let lines = buffer.lines();
-            if wrapped.logical_line >= lines.len() {
+            if wrapped_logical >= lines.len() {
                 continue;
             }
 
-            let line = &lines[wrapped.logical_line];
+            let line = &lines[wrapped_logical];
             let line_chars: Vec<char> = line.chars().collect();
+            let line_len = line_chars.len();
 
-            // Determine selection start and end within this visual line
-            let sel_start_in_line = if wrapped.logical_line == start_line {
-                start_col.saturating_sub(wrapped.start_char)
-            } else {
-                0
-            };
+            // Calculate which characters of this visual line are in selection
+            let (sel_start_in_line, sel_end_in_line) =
+                if wrapped_logical == start_line && wrapped_logical == end_line {
+                    // Selection within single line
+                    (start_col, end_col)
+                } else if wrapped_logical == start_line {
+                    // First line of multi-line selection: from start_col to end of line
+                    (start_col, line_len)
+                } else if wrapped_logical == end_line {
+                    // Last line of multi-line selection: from beginning to end_col
+                    (0, end_col)
+                } else if wrapped_logical > start_line && wrapped_logical < end_line {
+                    // Middle lines: entire line
+                    (0, line_len)
+                } else {
+                    // This visual line is not in selection
+                    continue;
+                };
 
-            let sel_end_in_line = if wrapped.logical_line == end_line {
-                (end_col).min(wrapped.end_char - wrapped.start_char)
-            } else {
-                wrapped.end_char - wrapped.start_char
-            };
+            // Adjust for wrapped line start
+            let sel_start = sel_start_in_line.saturating_sub(wrapped_start);
+            let sel_end = sel_end_in_line.saturating_sub(wrapped_start);
 
-            if sel_start_in_line >= sel_end_in_line {
+            // Skip if no selection in this visual line
+            if sel_start >= sel_end && sel_end > 0 {
+                continue;
+            }
+            if sel_end <= 0 {
                 continue;
             }
 
             // Calculate x positions
-            let mut start_x = 0.0;
-            let mut end_x = 0.0;
+            let mut x_offset = 0.0;
+            let mut sel_start_x = 0.0;
+            let mut sel_end_x = 0.0;
             let mut char_idx = 0;
 
-            for ch in line_chars.iter().skip(wrapped.start_char) {
-                let advance = glyph_atlas.char_advance_width(*ch);
-                if char_idx == sel_start_in_line {
-                    start_x = end_x;
+            // Only iterate through characters in this visual line
+            let chars_in_visual = wrapped_end.saturating_sub(wrapped_start);
+            for i in 0..chars_in_visual {
+                let char_global_idx = wrapped_start + i;
+                if char_global_idx >= line_len {
+                    break;
                 }
-                if char_idx < sel_end_in_line {
-                    end_x += advance;
+
+                let ch = line_chars[char_global_idx];
+                let advance = glyph_atlas.char_advance_width(ch);
+
+                if i == sel_start {
+                    sel_start_x = x_offset;
                 }
+                if i < sel_end {
+                    sel_end_x = x_offset + advance;
+                }
+
+                x_offset += advance;
                 char_idx += 1;
             }
 
-            let x = base_x + start_x;
-            let y =
-                layout.text_area_padding_top + (wrapped.visual_line as f32 * layout.line_height);
-            let width = end_x - start_x;
+            let width = sel_end_x - sel_start_x;
+            if width <= 0.0 {
+                continue;
+            }
+
+            let x = base_x + sel_start_x;
+            let y = layout.text_area_padding_top + (visual_line as f32 * layout.line_height);
             let height = layout.line_height;
 
-            if width > 0.0 {
-                let [x1, y1] = layout.pixel_to_ndc(x, y);
-                let [x2, y2] = layout.pixel_to_ndc(x + width, y + height);
+            let [x1, y1] = layout.pixel_to_ndc(x, y);
+            let [x2, y2] = layout.pixel_to_ndc(x + width, y + height);
 
-                let base_vertex = geometry.vertices.len() as u32;
+            let base_vertex = geometry.vertices.len() as u32;
 
-                geometry.vertices.push(CursorVertex {
-                    position: [x1, y1],
-                    color: selection_color,
-                });
+            geometry.vertices.push(CursorVertex {
+                position: [x1, y1],
+                color: selection_color,
+            });
 
-                geometry.vertices.push(CursorVertex {
-                    position: [x2, y1],
-                    color: selection_color,
-                });
+            geometry.vertices.push(CursorVertex {
+                position: [x2, y1],
+                color: selection_color,
+            });
 
-                geometry.vertices.push(CursorVertex {
-                    position: [x2, y2],
-                    color: selection_color,
-                });
+            geometry.vertices.push(CursorVertex {
+                position: [x2, y2],
+                color: selection_color,
+            });
 
-                geometry.vertices.push(CursorVertex {
-                    position: [x1, y2],
-                    color: selection_color,
-                });
+            geometry.vertices.push(CursorVertex {
+                position: [x1, y2],
+                color: selection_color,
+            });
 
-                geometry.indices.push(base_vertex);
-                geometry.indices.push(base_vertex + 1);
-                geometry.indices.push(base_vertex + 2);
+            geometry.indices.push(base_vertex);
+            geometry.indices.push(base_vertex + 1);
+            geometry.indices.push(base_vertex + 2);
 
-                geometry.indices.push(base_vertex);
-                geometry.indices.push(base_vertex + 2);
-                geometry.indices.push(base_vertex + 3);
-            }
+            geometry.indices.push(base_vertex);
+            geometry.indices.push(base_vertex + 2);
+            geometry.indices.push(base_vertex + 3);
         }
 
         geometry
