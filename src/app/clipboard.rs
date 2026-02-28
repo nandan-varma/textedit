@@ -1,8 +1,8 @@
-use crate::editor::Editor;
 use crate::editor::cursor::Selection;
+use crate::editor::Editor;
 
 pub fn copy_selection(editor: &Editor, sel: Selection) {
-    if sel.len() > 0 {
+    if !sel.is_empty() {
         let (s, e) = sel.range();
         let text = editor
             .buffer()
@@ -18,7 +18,7 @@ pub fn copy_selection(editor: &Editor, sel: Selection) {
 }
 
 pub fn cut_selection(editor: &mut Editor, sel: Selection) {
-    if sel.len() > 0 {
+    if !sel.is_empty() {
         let (s, e) = sel.range();
         let text = editor
             .buffer()
@@ -42,7 +42,7 @@ pub fn paste_at_cursor(editor: &mut Editor) {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
         if let Ok(text) = clipboard.get_text() {
             if let Some(sel) = editor.cursor().selection() {
-                if sel.len() > 0 {
+                if !sel.is_empty() {
                     let (s, e) = sel.range();
                     let txt = editor
                         .buffer()

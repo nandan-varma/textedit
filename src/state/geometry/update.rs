@@ -1,5 +1,5 @@
-use wgpu::util::DeviceExt;
 use super::super::init::State;
+use wgpu::util::DeviceExt;
 
 impl State {
     pub fn update_geometry(
@@ -44,7 +44,11 @@ impl State {
 
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
             // Compute wrapped text for rendering and cursor positioning
-            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(
+                buffer,
+                glyph_atlas,
+                &layout,
+            );
 
             // Update scrolling state based on total visual lines
             self.total_visual_lines = wrapped_text.total_visual_lines;
@@ -57,7 +61,9 @@ impl State {
             }
 
             // Compute visible logical lines for syntax highlighting.
-            let first_visual = self.scroll_visual_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
+            let first_visual = self
+                .scroll_visual_offset
+                .min(wrapped_text.total_visual_lines.saturating_sub(1));
             let last_visual = (first_visual + visible_lines).min(wrapped_text.total_visual_lines);
             let mut visible_logical: Vec<usize> = Vec::new();
             let mut last_seen: Option<usize> = None;
@@ -71,7 +77,9 @@ impl State {
                 }
             }
 
-            let line_colors = self.syntax.highlight_visible_lines(buffer, file_path, &visible_logical);
+            let line_colors =
+                self.syntax
+                    .highlight_visible_lines(buffer, file_path, &visible_logical);
 
             // Update text geometry
             let text_geometry = crate::renderer::text_geometry::TextGeometry::build_from_buffer(
@@ -82,7 +90,8 @@ impl State {
                 self.scroll_visual_offset,
                 Some(&line_colors),
                 colors,
-            ).map_err(|e| anyhow::anyhow!("{}", e))?;
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !text_geometry.vertices.is_empty() {
                 self.text_vertex_buffer = Some(self.device.create_buffer_init(
@@ -113,7 +122,8 @@ impl State {
                 &wrapped_text,
                 self.scroll_visual_offset,
                 colors,
-            ).map_err(|e| anyhow::anyhow!("{}", e))?;
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !line_nums.vertices.is_empty() {
                 self.line_numbers_vertex_buffer = Some(self.device.create_buffer_init(
@@ -143,7 +153,8 @@ impl State {
                 &layout,
                 colors,
                 status_bar_override,
-            ).map_err(|e| anyhow::anyhow!("{}", e))?;
+            )
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !status_bar.vertices.is_empty() {
                 self.status_bar_vertex_buffer = Some(self.device.create_buffer_init(

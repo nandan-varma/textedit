@@ -1,6 +1,9 @@
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 
+use crate::app::clipboard::{
+    copy_selection as app_copy, cut_selection as app_cut, paste_at_cursor as app_paste,
+};
 use crate::editor::operations::Operation;
 use crate::editor::Editor;
 
@@ -102,18 +105,18 @@ impl KeyboardController {
             }
             KeyCode::KeyC => {
                 if let Some(sel) = editor.cursor().selection() {
-                    copy_selection(editor, sel);
+                    app_copy(editor, sel);
                 }
                 true
             }
             KeyCode::KeyX => {
                 if let Some(sel) = editor.cursor().selection() {
-                    cut_selection(editor, sel);
+                    app_cut(editor, sel);
                 }
                 true
             }
             KeyCode::KeyV => {
-                paste_at_cursor(editor);
+                app_paste(editor);
                 true
             }
             KeyCode::KeyA => {
@@ -197,7 +200,7 @@ impl KeyboardController {
 
     fn handle_text_input(&mut self, editor: &mut Editor, text: &str) -> bool {
         if let Some(sel) = editor.cursor().selection() {
-            if sel.len() > 0 {
+            if !sel.is_empty() {
                 let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
@@ -388,7 +391,7 @@ impl KeyboardController {
 
     fn handle_backspace(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
-            if sel.len() > 0 {
+            if !sel.is_empty() {
                 let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
@@ -422,7 +425,7 @@ impl KeyboardController {
 
     fn handle_delete(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
-            if sel.len() > 0 {
+            if !sel.is_empty() {
                 let (s, e) = sel.range();
                 let txt = editor
                     .buffer()
@@ -483,75 +486,6 @@ impl KeyboardController {
 impl Default for KeyboardController {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
-    if sel.len() > 0 {
-        let (s, e) = sel.range();
-        let text = editor
-            .buffer()
-            .as_str()
-            .chars()
-            .skip(s)
-            .take(e - s)
-            .collect::<String>();
-        if let Ok(mut cb) = arboard::Clipboard::new() {
-            let _ = cb.set_text(text);
-        }
-    }
-}
-
-fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
-    if sel.len() > 0 {
-        let (s, e) = sel.range();
-        let text = editor
-            .buffer()
-            .as_str()
-            .chars()
-            .skip(s)
-            .take(e - s)
-            .collect::<String>();
-        if let Ok(mut cb) = arboard::Clipboard::new() {
-            let _ = cb.set_text(text.clone());
-        }
-        editor.buffer_mut().remove(s, e - s);
-        editor.cursor_mut().set_position(s);
-        editor
-            .history_mut()
-            .push(Operation::Delete { position: s, text });
-    }
-}
-
-fn paste_at_cursor(editor: &mut Editor) {
-    if let Ok(mut cb) = arboard::Clipboard::new() {
-        if let Ok(text) = cb.get_text() {
-            if let Some(sel) = editor.cursor().selection() {
-                if sel.len() > 0 {
-                    let (s, e) = sel.range();
-                    let txt = editor
-                        .buffer()
-                        .as_str()
-                        .chars()
-                        .skip(s)
-                        .take(e - s)
-                        .collect::<String>();
-                    editor.buffer_mut().remove(s, e - s);
-                    editor.history_mut().push(Operation::Delete {
-                        position: s,
-                        text: txt,
-                    });
-                    editor.cursor_mut().set_position(s);
-                }
-            }
-            let pos = editor.cursor().position();
-            editor.buffer_mut().insert(pos, &text);
-            editor.cursor_mut().set_position(pos + text.len());
-            editor.history_mut().push(Operation::Insert {
-                position: pos,
-                text,
-            });
-        }
     }
 }
 

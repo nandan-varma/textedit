@@ -197,13 +197,14 @@ impl State {
         })
     }
     // Helper to get current UI colors from config
+    #[allow(dead_code)]
     pub fn ui_colors(&self) -> crate::renderer::layout::Colors {
         self.config.colors()
     }
 }
 use std::sync::Arc;
 use winit::window::Window;
-use wgpu::{Device, Queue, Surface, SurfaceConfiguration, RenderPipeline, BindGroup};
+use wgpu::{Device, Queue, Surface, RenderPipeline, BindGroup};
 use crate::renderer::glyph_cache::GlyphAtlas;
 
 
@@ -226,6 +227,7 @@ pub struct State {
     pub glyph_atlas: Option<GlyphAtlas>,
     pub atlas_texture: Option<wgpu::Texture>,
     pub atlas_bind_group: Option<BindGroup>,
+    #[allow(dead_code)]
     pub bind_group_layout: Option<wgpu::BindGroupLayout>,
     pub ui_bg_vertex_buffer: Option<wgpu::Buffer>,
     pub ui_bg_index_buffer: Option<wgpu::Buffer>,

@@ -32,7 +32,7 @@ pub fn delete_selection_or_char(editor: &mut Editor) {
     use crate::editor::operations::Operation;
 
     if let Some(sel) = editor.cursor().selection() {
-        if sel.len() > 0 {
+        if !sel.is_empty() {
             let (s, e) = sel.range();
             let txt = editor
                 .buffer()

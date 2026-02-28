@@ -1,9 +1,9 @@
-use std::time::Instant;
-use winit::keyboard::ModifiersState;
 use crate::editor::Editor;
 use crate::editor::KeyboardController;
 use crate::menu::MenuHandler;
 use crate::state::State;
+use std::time::Instant;
+use winit::keyboard::ModifiersState;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum MouseButtonState {
@@ -24,5 +24,3 @@ pub struct App {
     pub is_dragging: bool,
     pub click_count: u8,
 }
-
-

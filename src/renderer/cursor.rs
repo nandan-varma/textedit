@@ -36,8 +36,15 @@ impl CursorGeometry {
         // First, render selection background if there's a selection
         if let Some(sel) = cursor.selection() {
             if !sel.is_empty() {
-                geometry =
-                    Self::render_selection(cursor, buffer, layout, glyph_atlas, scroll_offset, geometry, colors);
+                geometry = Self::render_selection(
+                    cursor,
+                    buffer,
+                    layout,
+                    glyph_atlas,
+                    scroll_offset,
+                    geometry,
+                    colors,
+                );
             }
         }
 
@@ -93,8 +100,7 @@ impl CursorGeometry {
                     scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1)),
                 );
                 let x = base_x + x_pos;
-                let y =
-                    layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
+                let y = layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
 
                 let cursor_width = 2.0;
                 let cursor_height = layout.line_height;
@@ -213,7 +219,7 @@ impl CursorGeometry {
             if sel_start >= sel_end && sel_end > 0 {
                 continue;
             }
-            if sel_end <= 0 {
+            if sel_end == 0 {
                 continue;
             }
 
@@ -249,8 +255,7 @@ impl CursorGeometry {
             }
 
             let x = base_x + sel_start_x;
-            let y =
-                layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
+            let y = layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
             let height = layout.line_height;
 
             let [x1, y1] = layout.pixel_to_ndc(x, y);
@@ -291,7 +296,12 @@ impl CursorGeometry {
     }
 
     /// Build geometry for rendering cursor (legacy, without wrapping)
-    pub fn build(cursor: &Cursor, buffer: &Buffer, layout: &EditorLayout, colors: &super::layout::Colors) -> Self {
+    pub fn build(
+        cursor: &Cursor,
+        buffer: &Buffer,
+        layout: &EditorLayout,
+        colors: &super::layout::Colors,
+    ) -> Self {
         let mut geometry = CursorGeometry::new();
 
         let (line, col) = buffer.char_to_line_col(cursor.position());

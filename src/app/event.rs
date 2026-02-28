@@ -1,11 +1,11 @@
+use crate::app::{App, MouseButtonState};
+use crate::menu::MenuAction;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::window::WindowAttributes;
-use crate::app::{App, MouseButtonState};
-use crate::menu::MenuAction;
 // (all helper/clipboard imports are now in mod.rs)
 
 impl ApplicationHandler<MenuAction> for App {
@@ -87,8 +87,7 @@ impl ApplicationHandler<MenuAction> for App {
                                     (self.last_click_time, self.last_click_position)
                                 {
                                     let time_diff = now.duration_since(last_time);
-                                    let pos_diff =
-                                        (x as f64 - last_x as f64).powi(2) + (y as f64 - last_y as f64).powi(2);
+                                    let pos_diff = (x - last_x).powi(2) + (y - last_y).powi(2);
                                     let pos_diff = pos_diff.sqrt();
 
                                     if time_diff.as_millis() < 500 && pos_diff < 10.0 {

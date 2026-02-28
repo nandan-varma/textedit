@@ -6,7 +6,6 @@ mod file;
 mod menu;
 mod renderer;
 mod state;
-mod ui;
 mod syntax;
 pub mod themes;
 
