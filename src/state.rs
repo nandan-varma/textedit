@@ -3,7 +3,7 @@ use winit::window::Window;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration, RenderPipeline, BindGroup};
 use wgpu::util::DeviceExt;
 use crate::renderer::glyph_cache::GlyphAtlas;
-use crate::renderer::text_geometry::TextGeometry;
+use crate::renderer::text_geometry::{TextGeometry, WrappedText};
 use crate::renderer::cursor::CursorGeometry;
 use crate::renderer::line_numbers::LineNumbersGeometry;
 use crate::renderer::status_bar::StatusBarGeometry;
@@ -408,6 +408,9 @@ impl State {
         }
 
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            // Compute wrapped text for rendering and cursor positioning
+            let wrapped_text = WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            
             // Update text geometry
             let text_geometry = TextGeometry::build_from_buffer(buffer, glyph_atlas, &layout)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -428,9 +431,9 @@ impl State {
                 self.text_index_count = 0;
             }
 
-            // Update line numbers
+            // Update line numbers with wrapped text info
             let total_lines = buffer.len_lines();
-            let line_nums = LineNumbersGeometry::build(total_lines, glyph_atlas, &layout)
+            let line_nums = LineNumbersGeometry::build_with_wrap(total_lines, glyph_atlas, &layout, &wrapped_text)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !line_nums.vertices.is_empty() {
@@ -493,8 +496,8 @@ impl State {
             }
         }
 
-        // Update cursor (doesn't need glyph atlas)
-        let cursor_geom = CursorGeometry::build(cursor, buffer, &layout);
+        // Update cursor with wrapped text info
+        let cursor_geom = CursorGeometry::build_with_wrap(cursor, buffer, &layout, &mut self.glyph_atlas.as_mut().unwrap());
         if !cursor_geom.vertices.is_empty() {
             self.cursor_vertex_buffer = Some(self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("cursor vertex buffer"),
@@ -659,5 +662,66 @@ impl State {
 
     pub fn window(&self) -> &Arc<Window> {
         &self.window
+    }
+
+    /// Get character index at pixel position (for mouse clicks)
+    pub fn get_char_at_position(&self, x: f64, y: f64, buffer: &Buffer) -> (usize, usize) {
+        let size = self.window.inner_size();
+        let layout = EditorLayout::new(
+            size.width as f32, 
+            size.height as f32, 
+            self.scaled_font_size, 
+            self.scale_factor
+        );
+
+        // Check if click is in text area
+        if x < layout.text_area.x as f64 || 
+           x > (layout.text_area.x + layout.text_area.width) as f64 ||
+           y < layout.text_area.y as f64 ||
+           y > (layout.text_area.y + layout.text_area.height) as f64 {
+            return (0, 0);
+        }
+
+        let rel_x = x as f32 - layout.text_area.x - layout.text_area_padding_left;
+        let rel_y = y as f32 - layout.text_area_padding_top;
+
+        let visual_line = (rel_y / layout.line_height).floor() as usize;
+        
+        if let Some(glyph_atlas) = &self.glyph_atlas {
+            let mut glyph_atlas_clone = glyph_atlas.clone();
+            let wrapped_text = WrappedText::wrap_buffer(
+                buffer, 
+                &mut glyph_atlas_clone, 
+                &layout
+            );
+            
+            // Find which visual line we clicked on
+            if visual_line < wrapped_text.wrapped_lines.len() {
+                let wrapped = &wrapped_text.wrapped_lines[visual_line];
+                let lines = buffer.lines();
+                
+                if wrapped.logical_line < lines.len() {
+                    let line = &lines[wrapped.logical_line];
+                    let line_chars: Vec<char> = line.chars().collect();
+                    
+                    // Find character position based on x offset
+                    let mut x_offset = 0.0;
+                    for (i, ch) in line_chars.iter().enumerate().skip(wrapped.start_char) {
+                        let advance = glyph_atlas_clone.char_advance_width(*ch);
+                        if x_offset + advance / 2.0 > rel_x {
+                            let char_idx = wrapped.start_char + i;
+                            return (wrapped.logical_line, char_idx.saturating_sub(wrapped.start_char));
+                        }
+                        x_offset += advance;
+                    }
+                    
+                    // Click past end of line
+                    let col = line_chars.len().saturating_sub(wrapped.start_char);
+                    return (wrapped.logical_line, col);
+                }
+            }
+        }
+
+        (0, 0)
     }
 }

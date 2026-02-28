@@ -1,9 +1,11 @@
 pub mod buffer;
 pub mod cursor;
+pub mod keyboard;
 pub mod operations;
 
 pub use buffer::Buffer;
 pub use cursor::Cursor;
+pub use keyboard::KeyboardController;
 pub use operations::OperationHistory;
 
 pub struct Editor {

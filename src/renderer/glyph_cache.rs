@@ -24,6 +24,7 @@ pub struct AtlasEntry {
     pub uv_max_y: f32,
 }
 
+#[derive(Clone, Debug)]
 pub struct GlyphAtlas {
     font: Font,
     font_size: f32,
@@ -187,5 +188,14 @@ impl GlyphAtlas {
 
     pub fn atlas_height(&self) -> u32 {
         self.atlas_height
+    }
+
+    /// Get the advance width of a character (how much to move pen after drawing)
+    pub fn char_advance_width(&mut self, ch: char) -> f32 {
+        if let Ok(entry) = self.get_or_rasterize(ch) {
+            entry.metrics.advance_width
+        } else {
+            self.font_size * 0.6 // fallback
+        }
     }
 }

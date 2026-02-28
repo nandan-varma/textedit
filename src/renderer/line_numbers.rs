@@ -1,6 +1,6 @@
 use super::glyph_cache::GlyphAtlas;
 use super::layout::EditorLayout;
-use super::text_geometry::TextVertex;
+use super::text_geometry::{TextVertex, WrappedText};
 
 pub struct LineNumbersGeometry {
     pub vertices: Vec<TextVertex>,
@@ -15,7 +15,107 @@ impl LineNumbersGeometry {
         }
     }
 
-    /// Build geometry for rendering line numbers
+    /// Build geometry for rendering line numbers with word wrapping support
+    pub fn build_with_wrap(
+        total_lines: usize,
+        glyph_atlas: &mut GlyphAtlas,
+        layout: &EditorLayout,
+        wrapped_text: &WrappedText,
+    ) -> Result<Self, String> {
+        let mut geometry = LineNumbersGeometry::new();
+
+        let visible_lines = layout
+            .visible_lines()
+            .min(wrapped_text.total_visual_lines.max(1));
+        let max_digits = total_lines.max(1).to_string().len();
+
+        let ascent = glyph_atlas.ascent();
+
+        // Track which logical lines we've already rendered
+        let mut rendered_logical_lines = Vec::new();
+
+        for visual_line in 0..visible_lines {
+            if visual_line >= wrapped_text.wrapped_lines.len() {
+                break;
+            }
+
+            let wrapped = &wrapped_text.wrapped_lines[visual_line];
+
+            // Only show line number for the first visual line of each logical line
+            if rendered_logical_lines.contains(&wrapped.logical_line) {
+                continue;
+            }
+            rendered_logical_lines.push(wrapped.logical_line);
+
+            let line_num = wrapped.logical_line + 1; // 1-indexed
+            let line_str = format!("{:>width$}", line_num, width = max_digits);
+
+            let text_width: f32 = line_str.len() as f32 * layout.char_width;
+            let base_x = layout.gutter.width - layout.line_number_padding_right - text_width;
+            let baseline_y =
+                layout.text_area_padding_top + (visual_line as f32 * layout.line_height) + ascent;
+
+            let mut x_offset = 0.0;
+
+            for ch in line_str.chars() {
+                let entry = match glyph_atlas.get_or_rasterize(ch) {
+                    Ok(e) => e.clone(),
+                    Err(_) => {
+                        x_offset += layout.char_width;
+                        continue;
+                    }
+                };
+
+                if entry.width == 0 || entry.height == 0 {
+                    x_offset += entry.metrics.advance_width;
+                    continue;
+                }
+
+                let glyph_x = base_x + x_offset + entry.metrics.xmin as f32;
+                let glyph_y = baseline_y - entry.metrics.ymin as f32 - entry.height as f32;
+
+                let [x1, y1] = layout.pixel_to_ndc(glyph_x, glyph_y);
+                let [x2, y2] = layout
+                    .pixel_to_ndc(glyph_x + entry.width as f32, glyph_y + entry.height as f32);
+
+                let vertex_start = geometry.vertices.len() as u32;
+
+                geometry.vertices.push(TextVertex {
+                    position: [x1, y1],
+                    uv: [entry.uv_min_x, entry.uv_min_y],
+                });
+
+                geometry.vertices.push(TextVertex {
+                    position: [x2, y1],
+                    uv: [entry.uv_max_x, entry.uv_min_y],
+                });
+
+                geometry.vertices.push(TextVertex {
+                    position: [x2, y2],
+                    uv: [entry.uv_max_x, entry.uv_max_y],
+                });
+
+                geometry.vertices.push(TextVertex {
+                    position: [x1, y2],
+                    uv: [entry.uv_min_x, entry.uv_max_y],
+                });
+
+                geometry.indices.push(vertex_start);
+                geometry.indices.push(vertex_start + 1);
+                geometry.indices.push(vertex_start + 2);
+
+                geometry.indices.push(vertex_start);
+                geometry.indices.push(vertex_start + 2);
+                geometry.indices.push(vertex_start + 3);
+
+                x_offset += entry.metrics.advance_width;
+            }
+        }
+
+        Ok(geometry)
+    }
+
+    /// Build geometry for rendering line numbers (legacy, without wrapping)
     pub fn build(
         total_lines: usize,
         glyph_atlas: &mut GlyphAtlas,

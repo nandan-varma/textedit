@@ -1,19 +1,32 @@
 use std::sync::Arc;
+use std::time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{ModifiersState, PhysicalKey};
+use winit::keyboard::ModifiersState;
 use winit::window::WindowAttributes;
 
-use crate::editor::operations::Operation;
 use crate::editor::Editor;
-use crate::file;
+use crate::editor::KeyboardController;
 use crate::state::State;
+
+#[derive(Clone, Copy, PartialEq)]
+enum MouseButtonState {
+    Released,
+    Pressed,
+}
 
 pub struct App {
     state: Option<State>,
     editor: Option<Editor>,
+    keyboard: KeyboardController,
     modifiers: ModifiersState,
+    mouse_button_state: MouseButtonState,
+    mouse_position: Option<(f64, f64)>,
+    last_click_time: Option<Instant>,
+    last_click_position: Option<(f64, f64)>,
+    is_dragging: bool,
+    click_count: u8,
 }
 
 impl App {
@@ -21,7 +34,14 @@ impl App {
         Self {
             state: None,
             editor: None,
+            keyboard: KeyboardController::new(),
             modifiers: ModifiersState::empty(),
+            mouse_button_state: MouseButtonState::Released,
+            mouse_position: None,
+            last_click_time: None,
+            last_click_position: None,
+            is_dragging: false,
+            click_count: 0,
         }
     }
 }
@@ -78,11 +98,100 @@ impl ApplicationHandler for App {
             }
             WindowEvent::ModifiersChanged(mods) => {
                 self.modifiers = mods.state();
+                self.keyboard.set_modifiers(self.modifiers);
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                use winit::event::MouseButton;
+
+                if button == MouseButton::Left {
+                    self.mouse_button_state = if state == winit::event::ElementState::Pressed {
+                        // Mouse pressed - position cursor
+                        if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                            if let Some((x, y)) = self.mouse_position {
+                                let now = Instant::now();
+
+                                // Determine click count
+                                let click_count = if let (Some(last_time), Some((last_x, last_y))) =
+                                    (self.last_click_time, self.last_click_position)
+                                {
+                                    let time_diff = now.duration_since(last_time);
+                                    let pos_diff =
+                                        ((x - last_x).powi(2) + (y - last_y).powi(2)).sqrt();
+
+                                    if time_diff.as_millis() < 500 && pos_diff < 10.0 {
+                                        if self.click_count >= 2 {
+                                            3 // triple click
+                                        } else {
+                                            2 // double click
+                                        }
+                                    } else {
+                                        1
+                                    }
+                                } else {
+                                    1
+                                };
+
+                                self.click_count = click_count;
+                                self.last_click_time = Some(now);
+                                self.last_click_position = Some((x, y));
+
+                                // Handle click based on count
+                                let (line, col) = state.get_char_at_position(x, y, editor.buffer());
+                                let char_idx =
+                                    editor.buffer().line_col_to_char(line, col).unwrap_or(0);
+
+                                match click_count {
+                                    2 => {
+                                        // Double click - select word
+                                        let buffer = editor.buffer().clone();
+                                        editor.cursor_mut().select_word_at_cursor(&buffer);
+                                    }
+                                    3 => {
+                                        // Triple click - select line
+                                        let buffer = editor.buffer().clone();
+                                        editor.cursor_mut().select_line(&buffer);
+                                    }
+                                    _ => {
+                                        // Single click - position cursor
+                                        editor.cursor_mut().set_position(char_idx);
+                                    }
+                                }
+
+                                if let Err(e) =
+                                    state.update_geometry(editor.buffer(), editor.cursor())
+                                {
+                                    eprintln!("Failed to update geometry: {}", e);
+                                }
+                            }
+                        }
+                        MouseButtonState::Pressed
+                    } else {
+                        // Mouse released
+                        self.is_dragging = false;
+                        MouseButtonState::Released
+                    };
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.mouse_position = Some((position.x, position.y));
+
+                if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                    if self.mouse_button_state == MouseButtonState::Pressed || self.is_dragging {
+                        let (line, col) =
+                            state.get_char_at_position(position.x, position.y, editor.buffer());
+                        let char_idx = editor.buffer().line_col_to_char(line, col).unwrap_or(0);
+                        editor.cursor_mut().extend_selection(char_idx);
+                        self.is_dragging = true;
+
+                        if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+                            eprintln!("Failed to update geometry: {}", e);
+                        }
+                    }
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
-                    handle_keyboard_input(editor, event, self.modifiers);
-                    // Update geometry (text and cursor) after buffer modification
+                    self.keyboard.handle_key_event(editor, event);
                     if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
                         eprintln!("Failed to update geometry: {}", e);
                     }
@@ -95,218 +204,6 @@ impl ApplicationHandler for App {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_some() {
             event_loop.set_control_flow(ControlFlow::Poll);
-        }
-    }
-}
-
-fn handle_keyboard_input(editor: &mut Editor, event: KeyEvent, modifiers: ModifiersState) {
-    if event.state != ElementState::Pressed {
-        return;
-    }
-
-    let PhysicalKey::Code(code) = event.physical_key else {
-        return;
-    };
-
-    use winit::keyboard::KeyCode;
-
-    // Handle Ctrl+X/C/V/Z/Y/S shortcuts
-    if modifiers.control_key() {
-        match code {
-            KeyCode::KeyZ => {
-                if let Some(op) = editor.history_mut().undo() {
-                    apply_operation_reverse(editor, op);
-                }
-                return;
-            }
-            KeyCode::KeyY => {
-                if let Some(op) = editor.history_mut().redo() {
-                    apply_operation(editor, op);
-                }
-                return;
-            }
-            KeyCode::KeyS => {
-                let path_opt = editor.file_path().map(|p| p.to_string());
-                if let Some(path) = path_opt {
-                    let content = editor.buffer().as_str();
-                    if let Err(e) = file::save_file(&path, &content) {
-                        eprintln!("Failed to save file: {}", e);
-                    } else {
-                        editor.set_modified(false);
-                    }
-                }
-                return;
-            }
-            KeyCode::KeyC => {
-                if let Some(sel) = editor.cursor().selection() {
-                    copy_to_clipboard(editor, sel);
-                }
-                return;
-            }
-            KeyCode::KeyX => {
-                if let Some(sel) = editor.cursor().selection() {
-                    let start = sel.start;
-                    let len = sel.len();
-                    if len > 0 {
-                        let text = editor.buffer().as_str();
-                        let selected = text.chars().skip(start).take(len).collect::<String>();
-                        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                            let _ = clipboard.set_text(selected.clone());
-                        }
-                        editor.buffer_mut().remove(start, len);
-                        editor.cursor_mut().set_position(start);
-                        editor.history_mut().push(Operation::Delete {
-                            position: start,
-                            text: selected,
-                        });
-                    }
-                }
-                return;
-            }
-            KeyCode::KeyV => {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    if let Ok(text) = clipboard.get_text() {
-                        let pos = editor.cursor().position();
-                        editor.buffer_mut().insert(pos, &text);
-                        let buffer_len = editor.buffer().len_chars();
-                        editor.cursor_mut().move_forward(buffer_len);
-                        editor.history_mut().push(Operation::Insert {
-                            position: pos,
-                            text,
-                        });
-                    }
-                }
-                return;
-            }
-            _ => {}
-        }
-    }
-
-    // Handle text input
-    if let Some(text) = event.text {
-        for ch in text.chars() {
-            if ch.is_control() {
-                continue;
-            }
-            let pos = editor.cursor().position();
-            editor.buffer_mut().insert(pos, &ch.to_string());
-            let buffer_len = editor.buffer().len_chars();
-            editor.cursor_mut().move_forward(buffer_len);
-            editor.history_mut().push(Operation::Insert {
-                position: pos,
-                text: ch.to_string(),
-            });
-        }
-        return;
-    }
-
-    // Handle special keys
-    match code {
-        KeyCode::ArrowLeft => editor.cursor_mut().move_backward(),
-        KeyCode::ArrowRight => {
-            let buffer_len = editor.buffer().len_chars();
-            editor.cursor_mut().move_forward(buffer_len);
-        }
-        KeyCode::ArrowUp => {
-            let buffer = editor.buffer().clone();
-            editor.cursor_mut().move_up(&buffer);
-        }
-        KeyCode::ArrowDown => {
-            let buffer = editor.buffer().clone();
-            editor.cursor_mut().move_down(&buffer);
-        }
-        KeyCode::Home => {
-            let buffer = editor.buffer().clone();
-            editor.cursor_mut().move_to_line_start(&buffer);
-        }
-        KeyCode::End => {
-            let buffer = editor.buffer().clone();
-            editor.cursor_mut().move_to_line_end(&buffer);
-        }
-        KeyCode::Backspace => {
-            let pos = editor.cursor().position();
-            if pos > 0 {
-                if let Some(ch) = editor.buffer().get_char(pos - 1) {
-                    editor.buffer_mut().remove(pos - 1, 1);
-                    editor.cursor_mut().set_position(pos - 1);
-                    editor.history_mut().push(Operation::Delete {
-                        position: pos - 1,
-                        text: ch.to_string(),
-                    });
-                }
-            }
-        }
-        KeyCode::Delete => {
-            let pos = editor.cursor().position();
-            if pos < editor.buffer().len_chars() {
-                if let Some(ch) = editor.buffer().get_char(pos) {
-                    editor.buffer_mut().remove(pos, 1);
-                    editor.history_mut().push(Operation::Delete {
-                        position: pos,
-                        text: ch.to_string(),
-                    });
-                }
-            }
-        }
-        KeyCode::Tab => {
-            let tab_str = "    ";
-            let pos = editor.cursor().position();
-            editor.buffer_mut().insert(pos, tab_str);
-            let buffer_len = editor.buffer().len_chars();
-            editor.cursor_mut().move_forward(buffer_len);
-            editor.history_mut().push(Operation::Insert {
-                position: pos,
-                text: tab_str.to_string(),
-            });
-        }
-        KeyCode::Enter => {
-            let pos = editor.cursor().position();
-            editor.buffer_mut().insert(pos, "\n");
-            let buffer_len = editor.buffer().len_chars();
-            editor.cursor_mut().move_forward(buffer_len);
-            editor.history_mut().push(Operation::Insert {
-                position: pos,
-                text: "\n".to_string(),
-            });
-        }
-        _ => {}
-    }
-}
-
-fn copy_to_clipboard(editor: &Editor, sel: crate::editor::cursor::Selection) {
-    let start = sel.start;
-    let len = sel.len();
-    if len > 0 {
-        let text = editor.buffer().as_str();
-        let selected = text.chars().skip(start).take(len).collect::<String>();
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(selected);
-        }
-    }
-}
-
-fn apply_operation(editor: &mut Editor, op: Operation) {
-    match op {
-        Operation::Insert { position, text } => {
-            editor.buffer_mut().insert(position, &text);
-            editor.cursor_mut().set_position(position + text.len());
-        }
-        Operation::Delete { position, text } => {
-            editor.buffer_mut().remove(position, text.len());
-            editor.cursor_mut().set_position(position);
-        }
-    }
-}
-
-fn apply_operation_reverse(editor: &mut Editor, op: Operation) {
-    match op {
-        Operation::Insert { position, text } => {
-            editor.buffer_mut().remove(position, text.len());
-            editor.cursor_mut().set_position(position);
-        }
-        Operation::Delete { position, text } => {
-            editor.buffer_mut().insert(position, &text);
-            editor.cursor_mut().set_position(position + text.len());
         }
     }
 }

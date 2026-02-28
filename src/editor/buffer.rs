@@ -63,6 +63,11 @@ impl Buffer {
         None
     }
 
+    /// Get the character index for the start of a line
+    pub fn line_to_char(&self, line: usize) -> usize {
+        self.content.line_to_char(line)
+    }
+
     pub fn as_str(&self) -> String {
         self.content.to_string()
     }

@@ -6,6 +6,7 @@ pub const BASE_LINE_NUMBER_GUTTER_WIDTH: f32 = 50.0;
 pub const BASE_LINE_NUMBER_PADDING_RIGHT: f32 = 10.0;
 pub const BASE_TEXT_AREA_PADDING_LEFT: f32 = 10.0;
 pub const BASE_TEXT_AREA_PADDING_TOP: f32 = 5.0;
+pub const BASE_TEXT_AREA_PADDING_RIGHT: f32 = 10.0;
 pub const BASE_STATUS_BAR_HEIGHT: f32 = 24.0;
 pub const BASE_STATUS_BAR_PADDING: f32 = 8.0;
 
@@ -19,6 +20,7 @@ impl Colors {
     pub const TEXT_COLOR: [f32; 4] = [0.92, 0.92, 0.92, 1.0]; // Light text
     pub const LINE_NUMBER_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0]; // Dimmer line numbers
     pub const CURSOR_COLOR: [f32; 4] = [0.9, 0.9, 0.9, 1.0]; // Bright cursor
+    pub const SELECTION_COLOR: [f32; 4] = [0.3, 0.5, 0.7, 0.7]; // Selection highlight (blue-ish)
     pub const GUTTER_SEPARATOR: [f32; 4] = [0.25, 0.25, 0.25, 1.0]; // Separator line
 }
 
@@ -66,6 +68,7 @@ pub struct EditorLayout {
     pub line_number_padding_right: f32,
     pub text_area_padding_left: f32,
     pub text_area_padding_top: f32,
+    pub text_area_padding_right: f32,
     pub status_bar_height: f32,
     pub status_bar_padding: f32,
 }
@@ -85,6 +88,7 @@ impl EditorLayout {
         let line_number_padding_right = (BASE_LINE_NUMBER_PADDING_RIGHT * scale_factor).round();
         let text_area_padding_left = (BASE_TEXT_AREA_PADDING_LEFT * scale_factor).round();
         let text_area_padding_top = (BASE_TEXT_AREA_PADDING_TOP * scale_factor).round();
+        let text_area_padding_right = (BASE_TEXT_AREA_PADDING_RIGHT * scale_factor).round();
         let status_bar_height = (BASE_STATUS_BAR_HEIGHT * scale_factor).round();
         let status_bar_padding = (BASE_STATUS_BAR_PADDING * scale_factor).round();
 
@@ -118,6 +122,7 @@ impl EditorLayout {
             line_number_padding_right,
             text_area_padding_left,
             text_area_padding_top,
+            text_area_padding_right,
             status_bar_height,
             status_bar_padding,
         }
