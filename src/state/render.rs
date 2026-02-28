@@ -21,10 +21,10 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: crate::renderer::layout::Colors::BACKGROUND[0] as f64,
-                            g: crate::renderer::layout::Colors::BACKGROUND[1] as f64,
-                            b: crate::renderer::layout::Colors::BACKGROUND[2] as f64,
-                            a: crate::renderer::layout::Colors::BACKGROUND[3] as f64,
+                            r: self.config.colors().background[0] as f64,
+                            g: self.config.colors().background[1] as f64,
+                            b: self.config.colors().background[2] as f64,
+                            a: self.config.colors().background[3] as f64,
                         }),
                         store: wgpu::StoreOp::Store,
                     },

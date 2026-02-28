@@ -23,12 +23,12 @@ impl TextRenderer {
         let mut out = Vec::with_capacity(chars.len());
         if let Some(colors) = colors {
             for (i, ch) in chars.iter().enumerate() {
-                let color = colors.get(i).copied().unwrap_or(self.config.theme.foreground);
+                let color = colors.get(i).copied().unwrap_or(self.config.colors().text_color);
                 out.push((*ch, color));
             }
         } else {
             for ch in chars {
-                out.push((ch, self.config.theme.foreground));
+                out.push((ch, self.config.colors().text_color));
             }
         }
         Some(out)

@@ -1,3 +1,31 @@
+use crate::renderer::layout::Colors;
+use crate::themes::EditorTheme;
+impl Theme {
+    pub fn from_syntect(theme: &syntect::highlighting::Theme) -> Colors {
+        // Try to extract background, foreground, etc. from syntect theme settings
+        let bg = theme.settings.background.unwrap_or(syntect::highlighting::Color { r: 30, g: 30, b: 30, a: 255 });
+        let fg = theme.settings.foreground.unwrap_or(syntect::highlighting::Color { r: 220, g: 220, b: 220, a: 255 });
+        let sel = theme.settings.selection.unwrap_or(syntect::highlighting::Color { r: 60, g: 120, b: 200, a: 180 });
+        let cursor = theme.settings.caret.unwrap_or(syntect::highlighting::Color { r: 255, g: 255, b: 255, a: 255 });
+        let line_num = fg;
+        let to_rgba = |c: syntect::highlighting::Color| {
+            [c.r as f32 / 255.0, c.g as f32 / 255.0, c.b as f32 / 255.0, c.a as f32 / 255.0]
+        };
+        let bg_rgba = to_rgba(bg);
+        Colors {
+            background: bg_rgba,
+            gutter_background: bg_rgba,
+            status_bar_background: bg_rgba,
+            text_color: to_rgba(fg),
+            line_number_color: to_rgba(line_num),
+            cursor_color: to_rgba(cursor),
+            selection_color: to_rgba(sel),
+            gutter_separator: bg_rgba,
+            scrollbar_track: bg_rgba,
+            scrollbar_thumb: bg_rgba,
+        }
+    }
+}
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -38,7 +66,7 @@ impl Default for FontConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditorConfig {
-    pub theme: Theme,
+    pub theme: EditorTheme,
     pub font: FontConfig,
     pub tab_width: usize,
     pub use_spaces: bool,
@@ -49,12 +77,17 @@ pub struct EditorConfig {
 impl Default for EditorConfig {
     fn default() -> Self {
         Self {
-            theme: Theme::default(),
+            theme: EditorTheme::Dracula,
             font: FontConfig::default(),
             tab_width: 4,
             use_spaces: true,
             line_numbers: true,
             syntax_theme: "base16-ocean.dark".to_string(),
         }
+    }
+}
+impl EditorConfig {
+    pub fn colors(&self) -> Colors {
+        self.theme.colors()
     }
 }

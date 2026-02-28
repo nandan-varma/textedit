@@ -45,10 +45,18 @@ impl MenuHandler {
                     "toggle_line_numbers" => Some(MenuAction::ToggleLineNumbers),
                     "toggle_status_bar" => Some(MenuAction::ToggleStatusBar),
                     "about" => Some(MenuAction::About),
+                    id if id.starts_with("theme_ui_") => {
+                        let theme = id.trim_start_matches("theme_ui_").to_string();
+                        Some(MenuAction::SetEditorTheme(theme))
+                    }
+                    id if id.starts_with("theme_") => {
+                        let theme = id.trim_start_matches("theme_").to_string();
+                        Some(MenuAction::SetTheme(theme))
+                    }
                     _ => None,
                 };
                 if let Some(a) = action {
-                    let _ = proxy.send_event(a);
+                        let _ = proxy.send_event(a);
                 }
             }
         }
@@ -224,6 +232,21 @@ impl MenuHandler {
             .append(&check("toggle_status_bar", "Show Status Bar", true))
             .unwrap();
 
+        // Theme menu (UI themes)
+        let theme_menu = muda::Submenu::new("Theme", true);
+        let ui_themes = [
+            ("Dracula", "theme_ui_Dracula"),
+            ("Solarized Dark", "theme_ui_SolarizedDark"),
+            ("One Dark", "theme_ui_OneDark"),
+            ("Gruvbox Dark", "theme_ui_GruvboxDark"),
+            ("Light", "theme_ui_Light"),
+        ];
+        for (label, id) in &ui_themes {
+            theme_menu
+                .append(&item_with_accel(id, label, None))
+                .unwrap();
+        }
+
         // Help menu
         let help_menu = muda::Submenu::new("Help", true);
         help_menu
@@ -238,6 +261,7 @@ impl MenuHandler {
         self.menu.append(&file_menu).unwrap();
         self.menu.append(&edit_menu).unwrap();
         self.menu.append(&view_menu).unwrap();
+        self.menu.append(&theme_menu).unwrap();
         self.menu.append(&help_menu).unwrap();
 
         &self.menu

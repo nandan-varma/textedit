@@ -13,19 +13,35 @@ pub const BASE_STATUS_BAR_PADDING: f32 = 8.0;
 pub const BASE_SCROLLBAR_WIDTH: f32 = 10.0;
 
 /// Colors for the UI (RGBA, 0.0-1.0)
-pub struct Colors;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Colors {
+    pub background: [f32; 4],
+    pub gutter_background: [f32; 4],
+    pub status_bar_background: [f32; 4],
+    pub text_color: [f32; 4],
+    pub line_number_color: [f32; 4],
+    pub cursor_color: [f32; 4],
+    pub selection_color: [f32; 4],
+    pub gutter_separator: [f32; 4],
+    pub scrollbar_track: [f32; 4],
+    pub scrollbar_thumb: [f32; 4],
+}
 
-impl Colors {
-    pub const BACKGROUND: [f32; 4] = [0.12, 0.12, 0.12, 1.0]; // Dark gray background
-    pub const GUTTER_BACKGROUND: [f32; 4] = [0.15, 0.15, 0.15, 1.0]; // Slightly lighter gutter
-    pub const STATUS_BAR_BACKGROUND: [f32; 4] = [0.18, 0.18, 0.18, 1.0]; // Status bar bg
-    pub const TEXT_COLOR: [f32; 4] = [0.92, 0.92, 0.92, 1.0]; // Light text
-    pub const LINE_NUMBER_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0]; // Dimmer line numbers
-    pub const CURSOR_COLOR: [f32; 4] = [0.9, 0.9, 0.9, 1.0]; // Bright cursor
-    pub const SELECTION_COLOR: [f32; 4] = [0.3, 0.5, 0.7, 0.7]; // Selection highlight (blue-ish)
-    pub const GUTTER_SEPARATOR: [f32; 4] = [0.25, 0.25, 0.25, 1.0]; // Separator line
-    pub const SCROLLBAR_TRACK: [f32; 4] = [0.16, 0.16, 0.16, 1.0]; // Scrollbar track
-    pub const SCROLLBAR_THUMB: [f32; 4] = [0.35, 0.35, 0.35, 1.0]; // Scrollbar thumb
+impl Default for Colors {
+    fn default() -> Self {
+        Self {
+            background: [0.12, 0.12, 0.12, 1.0],
+            gutter_background: [0.15, 0.15, 0.15, 1.0],
+            status_bar_background: [0.18, 0.18, 0.18, 1.0],
+            text_color: [0.92, 0.92, 0.92, 1.0],
+            line_number_color: [0.5, 0.5, 0.5, 1.0],
+            cursor_color: [0.9, 0.9, 0.9, 1.0],
+            selection_color: [0.3, 0.5, 0.7, 0.7],
+            gutter_separator: [0.25, 0.25, 0.25, 1.0],
+            scrollbar_track: [0.16, 0.16, 0.16, 1.0],
+            scrollbar_thumb: [0.35, 0.35, 0.35, 1.0],
+        }
+    }
 }
 
 /// Represents a rectangular area in pixel coordinates (top-left origin)

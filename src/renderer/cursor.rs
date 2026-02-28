@@ -1,5 +1,5 @@
 use super::glyph_cache::GlyphAtlas;
-use super::layout::{Colors, EditorLayout};
+use super::layout::EditorLayout;
 use crate::editor::{Buffer, Cursor};
 
 #[repr(C)]
@@ -29,6 +29,7 @@ impl CursorGeometry {
         layout: &EditorLayout,
         glyph_atlas: &mut GlyphAtlas,
         scroll_offset: usize,
+        colors: &super::layout::Colors,
     ) -> Self {
         let mut geometry = CursorGeometry::new();
 
@@ -36,7 +37,7 @@ impl CursorGeometry {
         if let Some(sel) = cursor.selection() {
             if !sel.is_empty() {
                 geometry =
-                    Self::render_selection(cursor, buffer, layout, glyph_atlas, scroll_offset, geometry);
+                    Self::render_selection(cursor, buffer, layout, glyph_atlas, scroll_offset, geometry, colors);
             }
         }
 
@@ -101,7 +102,7 @@ impl CursorGeometry {
                 let [x1, y1] = layout.pixel_to_ndc(x, y);
                 let [x2, y2] = layout.pixel_to_ndc(x + cursor_width, y + cursor_height);
 
-                let color = Colors::CURSOR_COLOR;
+                let color = colors.cursor_color;
 
                 let base_vertex = geometry.vertices.len() as u32;
 
@@ -145,6 +146,7 @@ impl CursorGeometry {
         glyph_atlas: &mut GlyphAtlas,
         scroll_offset: usize,
         mut geometry: Self,
+        colors: &super::layout::Colors,
     ) -> Self {
         let sel = cursor.selection().unwrap();
         let start = sel.start.min(sel.end);
@@ -158,7 +160,7 @@ impl CursorGeometry {
             super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
 
         let base_x = layout.text_area.x + layout.text_area_padding_left;
-        let selection_color = Colors::SELECTION_COLOR;
+        let selection_color = colors.selection_color;
 
         // Find all visual lines that intersect with the selection
         for wrapped in &wrapped_text.wrapped_lines {
@@ -289,7 +291,7 @@ impl CursorGeometry {
     }
 
     /// Build geometry for rendering cursor (legacy, without wrapping)
-    pub fn build(cursor: &Cursor, buffer: &Buffer, layout: &EditorLayout) -> Self {
+    pub fn build(cursor: &Cursor, buffer: &Buffer, layout: &EditorLayout, colors: &super::layout::Colors) -> Self {
         let mut geometry = CursorGeometry::new();
 
         let (line, col) = buffer.char_to_line_col(cursor.position());
@@ -304,7 +306,7 @@ impl CursorGeometry {
         let [x1, y1] = layout.pixel_to_ndc(x, y);
         let [x2, y2] = layout.pixel_to_ndc(x + cursor_width, y + cursor_height);
 
-        let color = Colors::CURSOR_COLOR;
+        let color = colors.cursor_color;
 
         geometry.vertices.push(CursorVertex {
             position: [x1, y1],

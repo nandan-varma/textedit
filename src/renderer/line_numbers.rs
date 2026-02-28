@@ -22,6 +22,7 @@ impl LineNumbersGeometry {
         layout: &EditorLayout,
         wrapped_text: &WrappedText,
         scroll_offset: usize,
+        colors: &super::layout::Colors,
     ) -> Result<Self, String> {
         let mut geometry = LineNumbersGeometry::new();
 
@@ -90,25 +91,25 @@ impl LineNumbersGeometry {
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 geometry.indices.push(vertex_start);
@@ -131,6 +132,7 @@ impl LineNumbersGeometry {
         total_lines: usize,
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
+        colors: &super::layout::Colors,
     ) -> Result<Self, String> {
         let mut geometry = LineNumbersGeometry::new();
 
@@ -181,28 +183,28 @@ impl LineNumbersGeometry {
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 // Top-right
                 geometry.vertices.push(TextVertex {
                     position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 // Bottom-right
                 geometry.vertices.push(TextVertex {
                     position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 // Bottom-left
                 geometry.vertices.push(TextVertex {
                     position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
-                    color: super::layout::Colors::LINE_NUMBER_COLOR,
+                    color: colors.line_number_color,
                 });
 
                 // Two triangles

@@ -1,4 +1,4 @@
-use super::layout::{Colors, EditorLayout};
+use super::layout::EditorLayout;
 use super::ui_background::ColorVertex;
 
 pub struct ScrollbarGeometry {
@@ -21,6 +21,7 @@ impl ScrollbarGeometry {
     /// `scroll_offset` is the index of the first visual line currently visible.
     pub fn build(
         layout: &EditorLayout,
+        colors: &super::layout::Colors,
         total_visual_lines: usize,
         visible_lines: usize,
         scroll_offset: usize,
@@ -37,7 +38,7 @@ impl ScrollbarGeometry {
         let [track_x2, track_y2] =
             layout.pixel_to_ndc(track.x + track.width, track.y + track.height);
 
-        let track_color = Colors::SCROLLBAR_TRACK;
+        let track_color = colors.scrollbar_track;
 
         let track_vertex_start = geom.vertices.len() as u32;
 
@@ -81,7 +82,7 @@ impl ScrollbarGeometry {
         let [thumb_x2, thumb_y2] =
             layout.pixel_to_ndc(track.x + track.width, thumb_top + thumb_height);
 
-        let thumb_color = Colors::SCROLLBAR_THUMB;
+        let thumb_color = colors.scrollbar_thumb;
         let thumb_vertex_start = geom.vertices.len() as u32;
 
         geom.vertices.push(ColorVertex {

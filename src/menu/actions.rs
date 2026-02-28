@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuAction {
     New,
     Open,
@@ -20,4 +20,6 @@ pub enum MenuAction {
     ToggleLineNumbers,
     ToggleStatusBar,
     About,
+    SetTheme(String),
+    SetEditorTheme(String),
 }

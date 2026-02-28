@@ -186,6 +186,7 @@ impl TextGeometry {
         wrapped_text: &WrappedText,
         scroll_offset: usize,
         line_colors: Option<&std::collections::HashMap<usize, Vec<[f32; 4]>>>,
+        colors: &super::layout::Colors,
     ) -> Result<Self, String> {
         let mut geometry = TextGeometry::new();
 
@@ -264,7 +265,7 @@ impl TextGeometry {
                 let char_idx_in_line = wrapped.start_char + i_in_line;
                 let color = colors_for_line
                     .and_then(|v| v.get(char_idx_in_line).copied())
-                    .unwrap_or(super::layout::Colors::TEXT_COLOR);
+                    .unwrap_or(colors.text_color);
 
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],

@@ -47,6 +47,7 @@ impl ApplicationHandler<MenuAction> for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state {
+                    let state: &mut crate::state::State = state;
                     if let Err(e) = state.render() {
                         eprintln!("Render error: {}", e);
                     }
@@ -55,11 +56,13 @@ impl ApplicationHandler<MenuAction> for App {
             }
             WindowEvent::Resized(physical_size) => {
                 if let Some(state) = &mut self.state {
+                    let state: &mut crate::state::State = state;
                     state.resize(physical_size.width, physical_size.height);
                 }
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 if let Some(state) = &mut self.state {
+                    let state: &mut crate::state::State = state;
                     if let Err(e) = state.set_scale_factor(scale_factor) {
                         eprintln!("Failed to update scale factor: {}", e);
                     }
@@ -75,6 +78,8 @@ impl ApplicationHandler<MenuAction> for App {
                 if button == MouseButton::Left {
                     self.mouse_button_state = if state == winit::event::ElementState::Pressed {
                         if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                            let editor: &mut crate::editor::Editor = editor;
+                            let state: &mut crate::state::State = state;
                             if let Some((x, y)) = self.mouse_position {
                                 let now = Instant::now();
 
@@ -152,6 +157,8 @@ impl ApplicationHandler<MenuAction> for App {
                 use winit::event::MouseScrollDelta;
 
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                    let editor: &mut crate::editor::Editor = editor;
+                    let state: &mut crate::state::State = state;
                     let lines_delta: i32 = match delta {
                         MouseScrollDelta::LineDelta(_, y) => {
                             // Positive y is typically scroll up.
@@ -193,6 +200,8 @@ impl ApplicationHandler<MenuAction> for App {
 
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                     if self.mouse_button_state == MouseButtonState::Pressed || self.is_dragging {
+                        let editor: &mut crate::editor::Editor = editor;
+                        let state: &mut crate::state::State = state;
                         let (line, col) = state
                             .get_char_at_position(
                                 position.x,
@@ -221,6 +230,8 @@ impl ApplicationHandler<MenuAction> for App {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
+                    let editor: &mut crate::editor::Editor = editor;
+                    let state: &mut crate::state::State = state;
                     self.keyboard.handle_key_event(editor, event);
 
                     // Keep the cursor in view after keyboard navigation/editing.

@@ -1,3 +1,4 @@
+use crate::menu::MenuAction;
 mod app;
 mod config;
 mod editor;
@@ -7,9 +8,10 @@ mod renderer;
 mod state;
 mod ui;
 mod syntax;
+pub mod themes;
 
 use app::App;
-use menu::{MenuAction, MenuHandler};
+use menu::MenuHandler;
 use winit::event_loop::EventLoop;
 
 fn main() {

@@ -1,4 +1,4 @@
-use super::layout::{Colors, EditorLayout};
+use super::layout::EditorLayout;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -21,7 +21,7 @@ impl UIBackgroundGeometry {
     }
 
     /// Build all UI background elements (gutter, status bar, separators)
-    pub fn build(layout: &EditorLayout) -> Self {
+    pub fn build(layout: &EditorLayout, colors: &super::layout::Colors) -> Self {
         let mut geometry = UIBackgroundGeometry::new();
 
         // Gutter background
@@ -31,7 +31,7 @@ impl UIBackgroundGeometry {
             layout.gutter.y,
             layout.gutter.width,
             layout.gutter.height,
-            Colors::GUTTER_BACKGROUND,
+            colors.gutter_background,
         );
 
         // Gutter separator (1px line)
@@ -41,7 +41,7 @@ impl UIBackgroundGeometry {
             layout.gutter.y,
             1.0,
             layout.gutter.height,
-            Colors::GUTTER_SEPARATOR,
+            colors.gutter_separator,
         );
 
         // Status bar background
@@ -51,7 +51,7 @@ impl UIBackgroundGeometry {
             layout.status_bar.y,
             layout.status_bar.width,
             layout.status_bar.height,
-            Colors::STATUS_BAR_BACKGROUND,
+            colors.status_bar_background,
         );
 
         // Status bar top separator
@@ -61,7 +61,7 @@ impl UIBackgroundGeometry {
             layout.status_bar.y,
             layout.status_bar.width,
             1.0,
-            Colors::GUTTER_SEPARATOR,
+            colors.gutter_separator,
         );
 
         geometry

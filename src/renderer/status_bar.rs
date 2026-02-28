@@ -22,6 +22,7 @@ impl StatusBarGeometry {
         buffer: &Buffer,
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
+        colors: &super::layout::Colors,
         override_text: Option<&str>,
     ) -> Result<Self, String> {
         let mut geometry = StatusBarGeometry::new();
@@ -75,28 +76,28 @@ impl StatusBarGeometry {
             geometry.vertices.push(TextVertex {
                 position: [x1, y1],
                 uv: [entry.uv_min_x, entry.uv_min_y],
-                color: super::layout::Colors::TEXT_COLOR,
+                color: colors.text_color,
             });
 
             // Top-right
             geometry.vertices.push(TextVertex {
                 position: [x2, y1],
                 uv: [entry.uv_max_x, entry.uv_min_y],
-                color: super::layout::Colors::TEXT_COLOR,
+                color: colors.text_color,
             });
 
             // Bottom-right
             geometry.vertices.push(TextVertex {
                 position: [x2, y2],
                 uv: [entry.uv_max_x, entry.uv_max_y],
-                color: super::layout::Colors::TEXT_COLOR,
+                color: colors.text_color,
             });
 
             // Bottom-left
             geometry.vertices.push(TextVertex {
                 position: [x1, y2],
                 uv: [entry.uv_min_x, entry.uv_max_y],
-                color: super::layout::Colors::TEXT_COLOR,
+                color: colors.text_color,
             });
 
             // Two triangles
