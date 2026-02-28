@@ -1,6 +1,8 @@
 /// UI Layout constants and calculations for the text editor
 /// All measurements are in base pixels (before scaling)
 
+use crate::renderer::glyph_cache::GlyphAtlas;
+
 // Base sizes (at 1x scale)
 pub const BASE_LINE_NUMBER_GUTTER_WIDTH: f32 = 50.0;
 pub const BASE_LINE_NUMBER_PADDING_RIGHT: f32 = 10.0;
@@ -183,5 +185,72 @@ impl EditorLayout {
     pub fn visible_lines(&self) -> usize {
         ((self.text_area.height - self.text_area_padding_top * 2.0) / self.line_height).floor()
             as usize
+    }
+
+    /// Hit-test a pixel coordinate against the buffer and return the corresponding
+    /// logical line/column if the point falls within the text area.
+    pub fn hit_test(&self, x: f32, y: f32, buffer: &crate::editor::Buffer, glyph_atlas: &mut GlyphAtlas) -> Option<(usize, usize)> {
+        // reject if outside
+        if x < self.text_area.x || x > self.text_area.right() || y < self.text_area.y || y > self.text_area.bottom() {
+            return None;
+        }
+
+        let mut rel_x = x - self.text_area.x - self.text_area_padding_left;
+        let mut rel_y = y - self.text_area_padding_top;
+        rel_x = rel_x.max(0.0);
+        rel_y = rel_y.max(0.0);
+
+        let visual_line = (rel_y / self.line_height).floor() as usize;
+        let wrapped_text = super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, self);
+        let clamped_visual = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
+
+        if let Some(wrapped) = wrapped_text.wrapped_lines.get(clamped_visual) {
+            let lines = buffer.lines();
+            if wrapped.logical_line < lines.len() {
+                let line = &lines[wrapped.logical_line];
+                let line_chars: Vec<char> = line.chars().collect();
+                let line_len = line_chars.len();
+
+                let visible_len = if line_len > 0 {
+                    let last = line_chars[line_len - 1];
+                    if last == '\n' || last == '\r' {
+                        line_len - 1
+                    } else {
+                        line_len
+                    }
+                } else {
+                    0
+                };
+
+                if visible_len == 0 {
+                    return Some((wrapped.logical_line, 0));
+                }
+
+                let mut x_offset = 0.0;
+                let chars_in_visual = wrapped.end_char.saturating_sub(wrapped.start_char);
+
+                for i in 0..chars_in_visual {
+                    let char_idx = wrapped.start_char + i;
+                    if char_idx >= visible_len {
+                        break;
+                    }
+                    let ch = line_chars[char_idx];
+                    let advance = glyph_atlas.char_advance_width(ch);
+                    let center = x_offset + advance / 2.0;
+                    if rel_x < center {
+                        return Some((wrapped.logical_line, char_idx));
+                    }
+                    x_offset += advance;
+                }
+
+                let col = (wrapped.start_char + chars_in_visual).min(visible_len);
+                return Some((wrapped.logical_line, col));
+            }
+        }
+
+        // end of buffer
+        let last_line = buffer.len_lines().saturating_sub(1);
+        let last_col = buffer.line(last_line).map(|l| l.chars().count()).unwrap_or(0);
+        Some((last_line, last_col))
     }
 }

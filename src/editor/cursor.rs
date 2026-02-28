@@ -10,6 +10,7 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// Create a normalized selection (start <= end).
     pub fn new(start: usize, end: usize) -> Self {
         Self {
             start: start.min(end),
@@ -17,12 +18,23 @@ impl Selection {
         }
     }
 
+    /// Return the ordered endpoints as a (start, end) pair.
+    pub fn range(&self) -> (usize, usize) {
+        if self.start <= self.end {
+            (self.start, self.end)
+        } else {
+            (self.end, self.start)
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
-        self.start == self.end
+        let (s, e) = self.range();
+        s == e
     }
 
     pub fn len(&self) -> usize {
-        self.end - self.start
+        let (s, e) = self.range();
+        e - s
     }
 }
 
@@ -67,7 +79,9 @@ impl Cursor {
 
     pub fn extend_selection(&mut self, pos: usize) {
         if let Some(ref mut sel) = self.selection {
-            sel.end = pos;
+            // keep original anchor and normalize
+            let anchor = sel.start;
+            *sel = Selection::new(anchor, pos);
         } else {
             self.selection = Some(Selection::new(self.position, pos));
         }
@@ -80,7 +94,8 @@ impl Cursor {
 
     pub fn set_selection_end(&mut self, pos: usize) {
         if let Some(ref mut sel) = self.selection {
-            sel.end = pos;
+            let anchor = sel.start;
+            *sel = Selection::new(anchor, pos);
         } else {
             self.selection = Some(Selection::new(self.position, pos));
         }

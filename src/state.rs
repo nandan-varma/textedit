@@ -671,91 +671,34 @@ impl State {
         &self.window
     }
 
-    /// Get character index at pixel position (for mouse clicks)
-    pub fn get_char_at_position(&self, x: f64, y: f64, buffer: &Buffer) -> (usize, usize) {
+    /// Get character index at pixel position (for mouse clicks).
+    ///
+    /// Returns `Some((line, col))` if the click lies within the current
+    /// text area.  Otherwise `None` is returned.  The layout is constructed
+    /// from the supplied show‑flags instead of hard‑coding them.
+    pub fn get_char_at_position(
+        &self,
+        x: f64,
+        y: f64,
+        buffer: &Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) -> Option<(usize, usize)> {
         let size = self.window.inner_size();
-        let layout = EditorLayout::new(
-            size.width as f32, 
-            size.height as f32, 
-            self.scaled_font_size, 
+        let mut layout = EditorLayout::new(
+            size.width as f32,
+            size.height as f32,
+            self.scaled_font_size,
             self.scale_factor,
-            true, // show_line_numbers
-            true, // show_status_bar
+            show_line_numbers,
+            show_status_bar,
         );
 
-        // Check if click is in text area
-        if x < layout.text_area.x as f64 || 
-           x > (layout.text_area.x + layout.text_area.width) as f64 ||
-           y < layout.text_area.y as f64 ||
-           y > (layout.text_area.y + layout.text_area.height) as f64 {
-            return (0, 0);
-        }
-
-        let rel_x = x as f32 - layout.text_area.x - layout.text_area_padding_left;
-        let rel_y = y as f32 - layout.text_area_padding_top;
-
-        // Clamp to valid range
-        let rel_x = rel_x.max(0.0);
-        let rel_y = rel_y.max(0.0);
-        
-        let visual_line = (rel_y / layout.line_height).floor() as usize;
-        
         if let Some(glyph_atlas) = &self.glyph_atlas {
-            let mut glyph_atlas_clone = glyph_atlas.clone();
-            let wrapped_text = WrappedText::wrap_buffer(
-                buffer, 
-                &mut glyph_atlas_clone, 
-                &layout
-            );
-            
-            // Find which visual line we clicked on - clamp to valid range
-            let clamped_visual_line = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
-            
-            if let Some(wrapped) = wrapped_text.wrapped_lines.get(clamped_visual_line) {
-                let lines = buffer.lines();
-                
-                if wrapped.logical_line < lines.len() {
-                    let line = &lines[wrapped.logical_line];
-                    let line_chars: Vec<char> = line.chars().collect();
-                    let line_len = line_chars.len();
-                    
-                    // If line is empty, return start position
-                    if line_len == 0 {
-                        return (wrapped.logical_line, 0);
-                    }
-                    
-                    // Find character position based on x offset
-                    let mut x_offset = 0.0;
-                    let chars_in_visual = wrapped.end_char - wrapped.start_char;
-                    
-                    for i in 0..chars_in_visual {
-                        let char_idx = wrapped.start_char + i;
-                        if char_idx >= line_len {
-                            break;
-                        }
-                        let ch = line_chars[char_idx];
-                        let advance = glyph_atlas_clone.char_advance_width(ch);
-                        
-                        // Click in first half of character = click before character
-                        // Click in second half = click after character
-                        let char_center = x_offset + advance / 2.0;
-                        if rel_x < char_center {
-                            return (wrapped.logical_line, char_idx);
-                        }
-                        x_offset += advance;
-                    }
-                    
-                    // Click past end of line - return position after last character
-                    // But cap it at the end of this wrapped segment, not the entire line
-                    let col = (wrapped.start_char + chars_in_visual).min(line_len);
-                    return (wrapped.logical_line, col);
-                }
-            }
+            let mut atlas_clone = glyph_atlas.clone();
+            layout.hit_test(x as f32, y as f32, buffer, &mut atlas_clone)
+        } else {
+            None
         }
-
-        // Click outside valid area - return end of last line
-        let last_line = buffer.len_lines().saturating_sub(1);
-        let last_col = buffer.line(last_line).map(|l| l.chars().count()).unwrap_or(0);
-        (last_line, last_col)
     }
 }

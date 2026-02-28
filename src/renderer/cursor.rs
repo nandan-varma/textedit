@@ -61,13 +61,25 @@ impl CursorGeometry {
                 let line = &lines[logical_line];
                 let line_chars: Vec<char> = line.chars().collect();
 
+                // determine visible length (exclude trailing newline)
+                let vis_len = if let Some(&last) = line_chars.last() {
+                    if last == '\n' || last == '\r' {
+                        line_chars.len().saturating_sub(1)
+                    } else {
+                        line_chars.len()
+                    }
+                } else {
+                    0
+                };
+
                 // Calculate x position - only count characters from start of this visual line
+                let vis_col = visual_col.min(vis_len);
                 let mut x_pos = 0.0;
-                let chars_in_visual = (wrapped.end_char - wrapped.start_char).min(visual_col);
+                let chars_in_visual = (wrapped.end_char - wrapped.start_char).min(vis_col);
 
                 for i in 0..chars_in_visual {
                     let char_idx = wrapped.start_char + i;
-                    if char_idx >= line_chars.len() {
+                    if char_idx >= vis_len {
                         break;
                     }
                     let ch = line_chars[char_idx];

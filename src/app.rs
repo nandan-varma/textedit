@@ -223,12 +223,13 @@ impl App {
 
     fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
         if sel.len() > 0 {
+            let (s,e) = sel.range();
             let text = editor
                 .buffer()
                 .as_str()
                 .chars()
-                .skip(sel.start)
-                .take(sel.len())
+                .skip(s)
+                .take(e - s)
                 .collect::<String>();
             if let Ok(mut clipboard) = arboard::Clipboard::new() {
                 let _ = clipboard.set_text(text);
@@ -238,22 +239,23 @@ impl App {
 
     fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
         if sel.len() > 0 {
+            let (s,e) = sel.range();
             let text = editor
                 .buffer()
                 .as_str()
                 .chars()
-                .skip(sel.start)
-                .take(sel.len())
+                .skip(s)
+                .take(e - s)
                 .collect::<String>();
             if let Ok(mut clipboard) = arboard::Clipboard::new() {
                 let _ = clipboard.set_text(text.clone());
             }
-            editor.buffer_mut().remove(sel.start, sel.len());
-            editor.cursor_mut().set_position(sel.start);
+            editor.buffer_mut().remove(s, e - s);
+            editor.cursor_mut().set_position(s);
             editor
                 .history_mut()
                 .push(crate::editor::operations::Operation::Delete {
-                    position: sel.start,
+                    position: s,
                     text,
                 });
         }
@@ -264,21 +266,22 @@ impl App {
             if let Ok(text) = clipboard.get_text() {
                 if let Some(sel) = editor.cursor().selection() {
                     if sel.len() > 0 {
+                        let (s,e) = sel.range();
                         let txt = editor
                             .buffer()
                             .as_str()
                             .chars()
-                            .skip(sel.start)
-                            .take(sel.len())
+                            .skip(s)
+                            .take(e - s)
                             .collect::<String>();
-                        editor.buffer_mut().remove(sel.start, sel.len());
+                        editor.buffer_mut().remove(s, e - s);
                         editor
                             .history_mut()
                             .push(crate::editor::operations::Operation::Delete {
-                                position: sel.start,
+                                position: s,
                                 text: txt,
                             });
-                        editor.cursor_mut().set_position(sel.start);
+                        editor.cursor_mut().set_position(s);
                     }
                 }
 
@@ -300,19 +303,20 @@ impl App {
 
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
+                let (s,e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
                     .chars()
-                    .skip(sel.start)
-                    .take(sel.len())
+                    .skip(s)
+                    .take(e - s)
                     .collect::<String>();
-                editor.buffer_mut().remove(sel.start, sel.len());
+                editor.buffer_mut().remove(s, e - s);
                 editor.history_mut().push(Operation::Delete {
-                    position: sel.start,
+                    position: s,
                     text: txt,
                 });
-                editor.cursor_mut().set_position(sel.start);
+                editor.cursor_mut().set_position(s);
                 return;
             }
         }
@@ -423,7 +427,15 @@ impl ApplicationHandler<MenuAction> for App {
                                 self.last_click_time = Some(now);
                                 self.last_click_position = Some((x, y));
 
-                                let (line, col) = state.get_char_at_position(x, y, editor.buffer());
+                                let (line, col) = state
+                                    .get_char_at_position(
+                                        x,
+                                        y,
+                                        editor.buffer(),
+                                        editor.show_line_numbers(),
+                                        editor.show_status_bar(),
+                                    )
+                                    .unwrap_or((0, 0));
                                 let char_idx =
                                     editor.buffer().line_col_to_char(line, col).unwrap_or(0);
 
@@ -463,8 +475,15 @@ impl ApplicationHandler<MenuAction> for App {
 
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                     if self.mouse_button_state == MouseButtonState::Pressed || self.is_dragging {
-                        let (line, col) =
-                            state.get_char_at_position(position.x, position.y, editor.buffer());
+                        let (line, col) = state
+                            .get_char_at_position(
+                                position.x,
+                                position.y,
+                                editor.buffer(),
+                                editor.show_line_numbers(),
+                                editor.show_status_bar(),
+                            )
+                            .unwrap_or((0, 0));
                         let char_idx = editor.buffer().line_col_to_char(line, col).unwrap_or(0);
                         editor.cursor_mut().extend_selection(char_idx);
                         self.is_dragging = true;

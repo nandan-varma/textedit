@@ -126,20 +126,20 @@ impl KeyboardController {
     fn handle_text_input(&mut self, editor: &mut Editor, text: &str) -> bool {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let start = sel.start;
+                let (s,e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
                     .chars()
-                    .skip(start)
-                    .take(sel.len())
+                    .skip(s)
+                    .take(e - s)
                     .collect::<String>();
-                editor.buffer_mut().remove(start, sel.len());
+                editor.buffer_mut().remove(s, e - s);
                 editor.history_mut().push(Operation::Delete {
-                    position: start,
+                    position: s,
                     text: txt,
                 });
-                editor.cursor_mut().set_position(start);
+                editor.cursor_mut().set_position(s);
             }
         }
 
@@ -317,18 +317,18 @@ impl KeyboardController {
     fn handle_backspace(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let start = sel.start;
+                let (s,e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
                     .chars()
-                    .skip(start)
-                    .take(sel.len())
+                    .skip(s)
+                    .take(e - s)
                     .collect::<String>();
-                editor.buffer_mut().remove(start, sel.len());
-                editor.cursor_mut().set_position(start);
+                editor.buffer_mut().remove(s, e - s);
+                editor.cursor_mut().set_position(s);
                 editor.history_mut().push(Operation::Delete {
-                    position: start,
+                    position: s,
                     text: txt,
                 });
                 return;
@@ -351,18 +351,18 @@ impl KeyboardController {
     fn handle_delete(&self, editor: &mut Editor) {
         if let Some(sel) = editor.cursor().selection() {
             if sel.len() > 0 {
-                let start = sel.start;
+                let (s,e) = sel.range();
                 let txt = editor
                     .buffer()
                     .as_str()
                     .chars()
-                    .skip(start)
-                    .take(sel.len())
+                    .skip(s)
+                    .take(e - s)
                     .collect::<String>();
-                editor.buffer_mut().remove(start, sel.len());
-                editor.cursor_mut().set_position(start);
+                editor.buffer_mut().remove(s, e - s);
+                editor.cursor_mut().set_position(s);
                 editor.history_mut().push(Operation::Delete {
-                    position: start,
+                    position: s,
                     text: txt,
                 });
                 return;
@@ -416,12 +416,13 @@ impl Default for KeyboardController {
 
 fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
     if sel.len() > 0 {
+        let (s,e) = sel.range();
         let text = editor
             .buffer()
             .as_str()
             .chars()
-            .skip(sel.start)
-            .take(sel.len())
+            .skip(s)
+            .take(e - s)
             .collect::<String>();
         if let Ok(mut cb) = arboard::Clipboard::new() {
             let _ = cb.set_text(text);
@@ -431,20 +432,21 @@ fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
 
 fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
     if sel.len() > 0 {
+        let (s,e) = sel.range();
         let text = editor
             .buffer()
             .as_str()
             .chars()
-            .skip(sel.start)
-            .take(sel.len())
+            .skip(s)
+            .take(e - s)
             .collect::<String>();
         if let Ok(mut cb) = arboard::Clipboard::new() {
             let _ = cb.set_text(text.clone());
         }
-        editor.buffer_mut().remove(sel.start, sel.len());
-        editor.cursor_mut().set_position(sel.start);
+        editor.buffer_mut().remove(s, e - s);
+        editor.cursor_mut().set_position(s);
         editor.history_mut().push(Operation::Delete {
-            position: sel.start,
+            position: s,
             text,
         });
     }
@@ -455,19 +457,20 @@ fn paste_at_cursor(editor: &mut Editor) {
         if let Ok(text) = cb.get_text() {
             if let Some(sel) = editor.cursor().selection() {
                 if sel.len() > 0 {
+                    let (s,e) = sel.range();
                     let txt = editor
                         .buffer()
                         .as_str()
                         .chars()
-                        .skip(sel.start)
-                        .take(sel.len())
+                        .skip(s)
+                        .take(e - s)
                         .collect::<String>();
-                    editor.buffer_mut().remove(sel.start, sel.len());
+                    editor.buffer_mut().remove(s, e - s);
                     editor.history_mut().push(Operation::Delete {
-                        position: sel.start,
+                        position: s,
                         text: txt,
                     });
-                    editor.cursor_mut().set_position(sel.start);
+                    editor.cursor_mut().set_position(s);
                 }
             }
             let pos = editor.cursor().position();
