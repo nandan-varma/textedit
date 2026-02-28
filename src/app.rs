@@ -53,6 +53,12 @@ impl App {
         self
     }
 
+    pub fn poll_menu_events(&mut self) {
+        if let Some(ref mut menu_handler) = self.menu_handler {
+            menu_handler.poll_menu_events();
+        }
+    }
+
     fn handle_menu_action(&mut self, action: MenuAction) {
         let editor = match &mut self.editor {
             Some(e) => e,
@@ -124,6 +130,9 @@ impl App {
             MenuAction::Close => {
                 std::process::exit(0);
             }
+            MenuAction::Quit => {
+                std::process::exit(0);
+            }
             MenuAction::Undo => {
                 if let Some(op) = editor.history_mut().undo() {
                     Self::apply_undo(editor, op);
@@ -147,6 +156,9 @@ impl App {
             MenuAction::Paste => {
                 Self::paste_at_cursor(editor);
             }
+            MenuAction::Delete => {
+                Self::delete_selection_or_char(editor);
+            }
             MenuAction::SelectAll => {
                 let len = editor.buffer().len_chars();
                 if len > 0 {
@@ -155,18 +167,27 @@ impl App {
                 }
             }
             MenuAction::ToggleLineNumbers => {
-                // TODO: Implement toggle
+                editor.toggle_line_numbers();
             }
             MenuAction::ToggleStatusBar => {
-                // TODO: Implement toggle
+                editor.toggle_status_bar();
             }
             MenuAction::About => {
-                // About handled by system
+                let _ = rfd::MessageDialog::new()
+                    .set_title("About textedit")
+                    .set_description("textedit v0.1.0\n\nA fast, cross-platform text editor built with Rust and wgpu.")
+                    .set_level(rfd::MessageLevel::Info)
+                    .show();
             }
         }
 
         if let Some(state) = &mut self.state {
-            if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+            if let Err(e) = state.update_geometry(
+                editor.buffer(),
+                editor.cursor(),
+                editor.show_line_numbers(),
+                editor.show_status_bar(),
+            ) {
                 eprintln!("Failed to update geometry: {}", e);
             }
         }
@@ -270,6 +291,41 @@ impl App {
                         position: pos,
                         text,
                     });
+            }
+        }
+    }
+
+    fn delete_selection_or_char(editor: &mut Editor) {
+        use crate::editor::operations::Operation;
+
+        if let Some(sel) = editor.cursor().selection() {
+            if sel.len() > 0 {
+                let txt = editor
+                    .buffer()
+                    .as_str()
+                    .chars()
+                    .skip(sel.start)
+                    .take(sel.len())
+                    .collect::<String>();
+                editor.buffer_mut().remove(sel.start, sel.len());
+                editor.history_mut().push(Operation::Delete {
+                    position: sel.start,
+                    text: txt,
+                });
+                editor.cursor_mut().set_position(sel.start);
+                return;
+            }
+        }
+
+        let pos = editor.cursor().position();
+        let buf_len = editor.buffer().len_chars();
+        if pos < buf_len {
+            if let Some(ch) = editor.buffer().get_char(pos) {
+                editor.buffer_mut().remove(pos, 1);
+                editor.history_mut().push(Operation::Delete {
+                    position: pos,
+                    text: ch.to_string(),
+                });
             }
         }
     }
@@ -385,9 +441,12 @@ impl ApplicationHandler<MenuAction> for App {
                                     }
                                 }
 
-                                if let Err(e) =
-                                    state.update_geometry(editor.buffer(), editor.cursor())
-                                {
+                                if let Err(e) = state.update_geometry(
+                                    editor.buffer(),
+                                    editor.cursor(),
+                                    editor.show_line_numbers(),
+                                    editor.show_status_bar(),
+                                ) {
                                     eprintln!("Failed to update geometry: {}", e);
                                 }
                             }
@@ -410,7 +469,12 @@ impl ApplicationHandler<MenuAction> for App {
                         editor.cursor_mut().extend_selection(char_idx);
                         self.is_dragging = true;
 
-                        if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+                        if let Err(e) = state.update_geometry(
+                            editor.buffer(),
+                            editor.cursor(),
+                            editor.show_line_numbers(),
+                            editor.show_status_bar(),
+                        ) {
                             eprintln!("Failed to update geometry: {}", e);
                         }
                     }
@@ -419,7 +483,12 @@ impl ApplicationHandler<MenuAction> for App {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                     self.keyboard.handle_key_event(editor, event);
-                    if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+                    if let Err(e) = state.update_geometry(
+                        editor.buffer(),
+                        editor.cursor(),
+                        editor.show_line_numbers(),
+                        editor.show_status_bar(),
+                    ) {
                         eprintln!("Failed to update geometry: {}", e);
                     }
                 }
@@ -433,6 +502,9 @@ impl ApplicationHandler<MenuAction> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Poll for menu events
+        self.poll_menu_events();
+
         if self.state.is_some() {
             event_loop.set_control_flow(ControlFlow::Poll);
         }

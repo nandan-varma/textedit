@@ -71,6 +71,9 @@ pub struct EditorLayout {
     pub text_area_padding_right: f32,
     pub status_bar_height: f32,
     pub status_bar_padding: f32,
+    // Show flags
+    pub show_line_numbers: bool,
+    pub show_status_bar: bool,
 }
 
 impl EditorLayout {
@@ -79,17 +82,27 @@ impl EditorLayout {
         viewport_height: f32,
         font_size: f32,
         scale_factor: f32,
+        show_line_numbers: bool,
+        show_status_bar: bool,
     ) -> Self {
         let line_height = (font_size * 1.4).round();
         let char_width = (font_size * 0.6).round();
 
         // Scale all layout constants
-        let gutter_width = (BASE_LINE_NUMBER_GUTTER_WIDTH * scale_factor).round();
+        let gutter_width = if show_line_numbers {
+            (BASE_LINE_NUMBER_GUTTER_WIDTH * scale_factor).round()
+        } else {
+            0.0
+        };
         let line_number_padding_right = (BASE_LINE_NUMBER_PADDING_RIGHT * scale_factor).round();
         let text_area_padding_left = (BASE_TEXT_AREA_PADDING_LEFT * scale_factor).round();
         let text_area_padding_top = (BASE_TEXT_AREA_PADDING_TOP * scale_factor).round();
         let text_area_padding_right = (BASE_TEXT_AREA_PADDING_RIGHT * scale_factor).round();
-        let status_bar_height = (BASE_STATUS_BAR_HEIGHT * scale_factor).round();
+        let status_bar_height = if show_status_bar {
+            (BASE_STATUS_BAR_HEIGHT * scale_factor).round()
+        } else {
+            0.0
+        };
         let status_bar_padding = (BASE_STATUS_BAR_PADDING * scale_factor).round();
 
         let gutter = Rect::new(0.0, 0.0, gutter_width, viewport_height - status_bar_height);
@@ -125,6 +138,8 @@ impl EditorLayout {
             text_area_padding_right,
             status_bar_height,
             status_bar_padding,
+            show_line_numbers,
+            show_status_bar,
         }
     }
 

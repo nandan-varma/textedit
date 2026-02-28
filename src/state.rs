@@ -387,9 +387,16 @@ impl State {
         })
     }
 
-    pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor) -> anyhow::Result<()> {
+    pub fn update_geometry(&mut self, buffer: &Buffer, cursor: &Cursor, show_line_numbers: bool, show_status_bar: bool) -> anyhow::Result<()> {
         let size = self.window.inner_size();
-        let layout = EditorLayout::new(size.width as f32, size.height as f32, self.scaled_font_size, self.scale_factor);
+        let layout = EditorLayout::new(
+            size.width as f32, 
+            size.height as f32, 
+            self.scaled_font_size, 
+            self.scale_factor,
+            show_line_numbers,
+            show_status_bar,
+        );
 
         // Update UI backgrounds
         let ui_bg = UIBackgroundGeometry::build(&layout);
@@ -671,7 +678,9 @@ impl State {
             size.width as f32, 
             size.height as f32, 
             self.scaled_font_size, 
-            self.scale_factor
+            self.scale_factor,
+            true, // show_line_numbers
+            true, // show_status_bar
         );
 
         // Check if click is in text area
@@ -737,7 +746,8 @@ impl State {
                     }
                     
                     // Click past end of line - return position after last character
-                    let col = line_len;
+                    // But cap it at the end of this wrapped segment, not the entire line
+                    let col = (wrapped.start_char + chars_in_visual).min(line_len);
                     return (wrapped.logical_line, col);
                 }
             }

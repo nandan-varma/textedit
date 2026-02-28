@@ -23,8 +23,10 @@ fn main() {
     
     // Create and initialize menu handler
     let mut menu_handler = MenuHandler::new();
-    menu_handler.init(proxy);
     menu_handler.build();
+    
+    // Initialize menu system
+    menu_handler.init(proxy);
     
     let mut app = App::new().with_menu(menu_handler);
 

@@ -1,4 +1,7 @@
-use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use muda::{
+    accelerator::{Accelerator, Code, Modifiers},
+    CheckMenuItem, Menu, MenuEvent, MenuItem,
+};
 use winit::event_loop::EventLoopProxy;
 
 pub mod actions {
@@ -9,11 +12,13 @@ pub mod actions {
         Save,
         SaveAs,
         Close,
+        Quit,
         Undo,
         Redo,
         Cut,
         Copy,
         Paste,
+        Delete,
         SelectAll,
         ToggleLineNumbers,
         ToggleStatusBar,
@@ -37,84 +42,182 @@ impl MenuHandler {
     }
 
     pub fn init(&mut self, proxy: EventLoopProxy<MenuAction>) {
-        let proxy_clone = proxy.clone();
         self.proxy = Some(proxy);
-        MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            let id = event.id().as_ref();
-            let action = match id {
-                "New" => Some(MenuAction::New),
-                "Open" => Some(MenuAction::Open),
-                "Save" => Some(MenuAction::Save),
-                "Save As" => Some(MenuAction::SaveAs),
-                "Close" => Some(MenuAction::Close),
-                "Undo" => Some(MenuAction::Undo),
-                "Redo" => Some(MenuAction::Redo),
-                "Cut" => Some(MenuAction::Cut),
-                "Copy" => Some(MenuAction::Copy),
-                "Paste" => Some(MenuAction::Paste),
-                "Select All" => Some(MenuAction::SelectAll),
-                "Line Numbers" => Some(MenuAction::ToggleLineNumbers),
-                "Status Bar" => Some(MenuAction::ToggleStatusBar),
-                "About textedit" => Some(MenuAction::About),
-                "Quit textedit" => Some(MenuAction::Close), // Close acts as quit
-                _ => None,
-            };
-            if let Some(a) = action {
-                let _ = proxy_clone.send_event(a);
+    }
+
+    pub fn poll_menu_events(&self) {
+        if let Some(proxy) = &self.proxy {
+            if let Ok(event) = MenuEvent::receiver().try_recv() {
+                let id = event.id().as_ref();
+                let action = match id {
+                    "New" => Some(MenuAction::New),
+                    "Open" => Some(MenuAction::Open),
+                    "Save" => Some(MenuAction::Save),
+                    "Save As" => Some(MenuAction::SaveAs),
+                    "Close" => Some(MenuAction::Close),
+                    "Quit textedit" => Some(MenuAction::Quit),
+                    "Undo" => Some(MenuAction::Undo),
+                    "Redo" => Some(MenuAction::Redo),
+                    "Cut" => Some(MenuAction::Cut),
+                    "Copy" => Some(MenuAction::Copy),
+                    "Paste" => Some(MenuAction::Paste),
+                    "Delete" => Some(MenuAction::Delete),
+                    "Select All" => Some(MenuAction::SelectAll),
+                    "Show Line Numbers" => Some(MenuAction::ToggleLineNumbers),
+                    "Show Status Bar" => Some(MenuAction::ToggleStatusBar),
+                    "About textedit" => Some(MenuAction::About),
+                    _ => None,
+                };
+                if let Some(a) = action {
+                    let _ = proxy.send_event(a);
+                }
             }
-        }));
+        }
     }
 
     pub fn build(&mut self) -> &Menu {
         // App menu (macOS: becomes the app name menu)
         let app_menu = muda::Submenu::new("textedit", true);
-        app_menu.append(&item("about", "About textedit")).unwrap();
+        app_menu
+            .append(&item_with_accel("about", "About textedit", None))
+            .unwrap();
         app_menu
             .append(&muda::PredefinedMenuItem::separator())
             .unwrap();
-        app_menu.append(&item("quit", "Quit textedit")).unwrap();
+        app_menu
+            .append(&item_with_accel(
+                "quit",
+                "Quit textedit",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyQ)),
+            ))
+            .unwrap();
 
         // File menu
         let file_menu = muda::Submenu::new("File", true);
-        file_menu.append(&item("new", "New")).unwrap();
-        file_menu.append(&item("open", "Open")).unwrap();
+        file_menu
+            .append(&item_with_accel(
+                "new",
+                "New",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyN)),
+            ))
+            .unwrap();
+        file_menu
+            .append(&item_with_accel(
+                "open",
+                "Open",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyO)),
+            ))
+            .unwrap();
         file_menu
             .append(&muda::PredefinedMenuItem::separator())
             .unwrap();
-        file_menu.append(&item("save", "Save")).unwrap();
-        file_menu.append(&item("save_as", "Save As")).unwrap();
+        file_menu
+            .append(&item_with_accel(
+                "save",
+                "Save",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyS)),
+            ))
+            .unwrap();
+        file_menu
+            .append(&item_with_accel(
+                "save_as",
+                "Save As",
+                Some(Accelerator::new(
+                    Some(Modifiers::SUPER | Modifiers::SHIFT),
+                    Code::KeyS,
+                )),
+            ))
+            .unwrap();
         file_menu
             .append(&muda::PredefinedMenuItem::separator())
             .unwrap();
-        file_menu.append(&item("close", "Close")).unwrap();
+        file_menu
+            .append(&item_with_accel(
+                "close",
+                "Close",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyW)),
+            ))
+            .unwrap();
 
         // Edit menu
         let edit_menu = muda::Submenu::new("Edit", true);
-        edit_menu.append(&item("undo", "Undo")).unwrap();
-        edit_menu.append(&item("redo", "Redo")).unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "undo",
+                "Undo",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyZ)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "redo",
+                "Redo",
+                Some(Accelerator::new(
+                    Some(Modifiers::SUPER | Modifiers::SHIFT),
+                    Code::KeyZ,
+                )),
+            ))
+            .unwrap();
         edit_menu
             .append(&muda::PredefinedMenuItem::separator())
             .unwrap();
-        edit_menu.append(&item("cut", "Cut")).unwrap();
-        edit_menu.append(&item("copy", "Copy")).unwrap();
-        edit_menu.append(&item("paste", "Paste")).unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "cut",
+                "Cut",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyX)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "copy",
+                "Copy",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyC)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "paste",
+                "Paste",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyV)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "delete",
+                "Delete",
+                Some(Accelerator::new(None, Code::Delete)),
+            ))
+            .unwrap();
         edit_menu
             .append(&muda::PredefinedMenuItem::separator())
             .unwrap();
-        edit_menu.append(&item("select_all", "Select All")).unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "select_all",
+                "Select All",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyA)),
+            ))
+            .unwrap();
 
         // View menu
         let view_menu = muda::Submenu::new("View", true);
         view_menu
-            .append(&check("toggle_line_numbers", "Line Numbers", true))
+            .append(&check("toggle_line_numbers", "Show Line Numbers", true))
             .unwrap();
         view_menu
-            .append(&check("toggle_status_bar", "Status Bar", true))
+            .append(&check("toggle_status_bar", "Show Status Bar", true))
             .unwrap();
 
         // Help menu
         let help_menu = muda::Submenu::new("Help", true);
-        help_menu.append(&item("help", "textedit Help")).unwrap();
+        help_menu
+            .append(&item_with_accel(
+                "help",
+                "textedit Help",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::F1)),
+            ))
+            .unwrap();
 
         self.menu.append(&app_menu).unwrap();
         self.menu.append(&file_menu).unwrap();
@@ -168,6 +271,10 @@ impl Default for MenuHandler {
 
 fn item(_id: &str, label: &str) -> MenuItem {
     MenuItem::new(label, true, None)
+}
+
+fn item_with_accel(_id: &str, label: &str, accelerator: Option<Accelerator>) -> MenuItem {
+    MenuItem::new(label, true, accelerator)
 }
 
 fn check(_id: &str, label: &str, checked: bool) -> CheckMenuItem {
