@@ -50,8 +50,6 @@ impl CursorGeometry {
 
         let base_x = layout.text_area.x + layout.text_area_padding_left;
 
-        let lines = buffer.lines();
-
         // Find the wrapped line that contains our cursor position
         let wrapped_opt = wrapped_text
             .wrapped_lines
@@ -59,9 +57,11 @@ impl CursorGeometry {
             .find(|w| w.logical_line == logical_line && w.visual_line == visual_line);
 
         if let Some(wrapped) = wrapped_opt {
-            if logical_line < lines.len() {
-                let line = &lines[logical_line];
-                let line_chars: Vec<char> = line.chars().collect();
+            if logical_line < buffer.len_lines() {
+                let line_chars: Vec<char> = buffer
+                    .line_slice(logical_line)
+                    .map(|l| l.chars().collect())
+                    .unwrap_or_default();
 
                 // determine visible length (exclude trailing newline)
                 let vis_len = if let Some(&last) = line_chars.last() {
@@ -174,13 +174,14 @@ impl CursorGeometry {
             let screen_line = visual_line.saturating_sub(first_visual);
 
             // Get line content
-            let lines = buffer.lines();
-            if wrapped_logical >= lines.len() {
+            if wrapped_logical >= buffer.len_lines() {
                 continue;
             }
 
-            let line = &lines[wrapped_logical];
-            let line_chars: Vec<char> = line.chars().collect();
+            let line_chars: Vec<char> = buffer
+                .line_slice(wrapped_logical)
+                .map(|l| l.chars().collect())
+                .unwrap_or_default();
             let line_len = line_chars.len();
 
             // Calculate which characters of this visual line are in selection

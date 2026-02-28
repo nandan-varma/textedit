@@ -237,10 +237,11 @@ impl EditorLayout {
         let clamped_visual = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
 
         if let Some(wrapped) = wrapped_text.wrapped_lines.get(clamped_visual) {
-            let lines = buffer.lines();
-            if wrapped.logical_line < lines.len() {
-                let line = &lines[wrapped.logical_line];
-                let line_chars: Vec<char> = line.chars().collect();
+            if wrapped.logical_line < buffer.len_lines() {
+                let line_chars: Vec<char> = buffer
+                    .line_slice(wrapped.logical_line)
+                    .map(|l| l.chars().collect())
+                    .unwrap_or_default();
                 let line_len = line_chars.len();
 
                 let visible_len = if line_len > 0 {
@@ -282,10 +283,7 @@ impl EditorLayout {
 
         // end of buffer
         let last_line = buffer.len_lines().saturating_sub(1);
-        let last_col = buffer
-            .line(last_line)
-            .map(|l| l.chars().count())
-            .unwrap_or(0);
+        let last_col = buffer.line_len_chars(last_line);
         Some((last_line, last_col))
     }
 }

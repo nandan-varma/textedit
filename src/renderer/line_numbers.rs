@@ -90,21 +90,25 @@ impl LineNumbersGeometry {
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 geometry.indices.push(vertex_start);
@@ -177,24 +181,28 @@ impl LineNumbersGeometry {
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 // Top-right
                 geometry.vertices.push(TextVertex {
                     position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 // Bottom-right
                 geometry.vertices.push(TextVertex {
                     position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 // Bottom-left
                 geometry.vertices.push(TextVertex {
                     position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
+                    color: super::layout::Colors::LINE_NUMBER_COLOR,
                 });
 
                 // Two triangles

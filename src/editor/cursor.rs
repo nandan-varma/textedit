@@ -367,4 +367,11 @@ impl Cursor {
         }
         self.selection = None;
     }
+
+    pub fn select_range(&mut self, start: usize, end: usize) {
+        self.position = start;
+        self.selection = Some(Selection::new(start, start));
+        self.extend_selection(end);
+        self.preferred_col = None;
+    }
 }

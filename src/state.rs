@@ -69,6 +69,9 @@ pub struct State {
     scrollbar_vertex_buffer: Option<wgpu::Buffer>,
     scrollbar_index_buffer: Option<wgpu::Buffer>,
     scrollbar_index_count: u32,
+
+    // Syntax highlighting
+    syntax: crate::syntax::SyntaxHighlighter,
 }
 
 impl State {
@@ -261,6 +264,7 @@ impl State {
             scrollbar_vertex_buffer: None,
             scrollbar_index_buffer: None,
             scrollbar_index_count: 0,
+            syntax: crate::syntax::SyntaxHighlighter::new(),
         })
     }
 
@@ -306,7 +310,7 @@ impl State {
             push_constant_ranges: &[],
         });
 
-        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
+        let vertex_attrs = wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4];
         let vertex_layout = wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<crate::renderer::text_geometry::TextVertex>() as u64,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -416,6 +420,8 @@ impl State {
         cursor: &Cursor,
         show_line_numbers: bool,
         show_status_bar: bool,
+        status_bar_override: Option<&str>,
+        file_path: Option<&str>,
     ) -> anyhow::Result<()> {
         let size = self.window.inner_size();
         let layout = EditorLayout::new(
@@ -461,6 +467,27 @@ impl State {
                 self.scroll_visual_offset = 0;
             }
 
+            // Compute visible logical lines for syntax highlighting.
+            let first_visual = self
+                .scroll_visual_offset
+                .min(wrapped_text.total_visual_lines.saturating_sub(1));
+            let last_visual = (first_visual + visible_lines).min(wrapped_text.total_visual_lines);
+            let mut visible_logical: Vec<usize> = Vec::new();
+            let mut last_seen: Option<usize> = None;
+            for w in &wrapped_text.wrapped_lines {
+                if w.visual_line < first_visual || w.visual_line >= last_visual {
+                    continue;
+                }
+                if last_seen != Some(w.logical_line) {
+                    visible_logical.push(w.logical_line);
+                    last_seen = Some(w.logical_line);
+                }
+            }
+
+            let line_colors =
+                self.syntax
+                    .highlight_visible_lines(buffer, file_path, &visible_logical);
+
             // Update text geometry
             let text_geometry = TextGeometry::build_from_buffer(
                 buffer,
@@ -468,6 +495,7 @@ impl State {
                 &layout,
                 &wrapped_text,
                 self.scroll_visual_offset,
+                Some(&line_colors),
             )
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -523,7 +551,8 @@ impl State {
             }
 
             // Update status bar (independent of scrolling)
-            let status_bar = StatusBarGeometry::build(cursor, buffer, glyph_atlas, &layout)
+            let status_bar =
+                StatusBarGeometry::build(cursor, buffer, glyph_atlas, &layout, status_bar_override)
                 .map_err(|e| anyhow::anyhow!("{}", e))?;
 
             if !status_bar.vertices.is_empty() {

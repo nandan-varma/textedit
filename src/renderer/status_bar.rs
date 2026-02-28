@@ -22,6 +22,7 @@ impl StatusBarGeometry {
         buffer: &Buffer,
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
+        override_text: Option<&str>,
     ) -> Result<Self, String> {
         let mut geometry = StatusBarGeometry::new();
 
@@ -29,13 +30,12 @@ impl StatusBarGeometry {
         let (line, col) = buffer.char_to_line_col(cursor.position());
         let total_lines = buffer.len_lines();
 
-        // Status bar text: "Ln X, Col Y | UTF-8 | Lines: N"
-        let status_text = format!(
-            "Ln {}, Col {}  |  UTF-8  |  {} lines",
-            line + 1,
-            col + 1,
-            total_lines
-        );
+        // Status bar text: either an override (e.g. Find/Replace), or default info.
+        let status_text = if let Some(t) = override_text {
+            t.to_string()
+        } else {
+            format!("Ln {}, Col {}  |  UTF-8  |  {} lines", line + 1, col + 1, total_lines)
+        };
 
         // Get font metrics for baseline positioning
         let ascent = glyph_atlas.ascent();
@@ -75,24 +75,28 @@ impl StatusBarGeometry {
             geometry.vertices.push(TextVertex {
                 position: [x1, y1],
                 uv: [entry.uv_min_x, entry.uv_min_y],
+                color: super::layout::Colors::TEXT_COLOR,
             });
 
             // Top-right
             geometry.vertices.push(TextVertex {
                 position: [x2, y1],
                 uv: [entry.uv_max_x, entry.uv_min_y],
+                color: super::layout::Colors::TEXT_COLOR,
             });
 
             // Bottom-right
             geometry.vertices.push(TextVertex {
                 position: [x2, y2],
                 uv: [entry.uv_max_x, entry.uv_max_y],
+                color: super::layout::Colors::TEXT_COLOR,
             });
 
             // Bottom-left
             geometry.vertices.push(TextVertex {
                 position: [x1, y2],
                 uv: [entry.uv_min_x, entry.uv_max_y],
+                color: super::layout::Colors::TEXT_COLOR,
             });
 
             // Two triangles

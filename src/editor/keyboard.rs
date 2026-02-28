@@ -28,6 +28,11 @@ impl KeyboardController {
             return false;
         };
 
+        // Command bar (Find/Replace) captures input while active.
+        if editor.is_command_bar_active() {
+            return self.handle_command_bar_input(editor, code, event.text.as_deref());
+        }
+
         // Handle Ctrl/Cmd shortcuts first
         if self.modifiers.control_key() || self.modifiers.super_key() {
             return self.handle_shortcut(editor, code);
@@ -119,7 +124,74 @@ impl KeyboardController {
                 }
                 true
             }
+            KeyCode::KeyF => {
+                editor.begin_find();
+                true
+            }
+            KeyCode::KeyH => {
+                editor.begin_replace();
+                true
+            }
+            KeyCode::KeyG => {
+                if self.modifiers.shift_key() {
+                    editor.find_prev()
+                } else {
+                    editor.find_next()
+                }
+            }
             _ => false,
+        }
+    }
+
+    fn handle_command_bar_input(
+        &mut self,
+        editor: &mut Editor,
+        code: KeyCode,
+        text: Option<&str>,
+    ) -> bool {
+        match code {
+            KeyCode::Escape => {
+                editor.cancel_command_bar();
+                true
+            }
+            KeyCode::Enter => {
+                // Find applies in Find mode; Replace applies in Replace mode.
+                if let Some(cb) = editor.command_bar() {
+                    match cb.mode {
+                        crate::editor::CommandBarMode::Find => {
+                            editor.find_next();
+                        }
+                        crate::editor::CommandBarMode::Replace => {
+                            editor.replace_next();
+                        }
+                    }
+                }
+                true
+            }
+            KeyCode::Backspace => {
+                if let Some(cb) = editor.command_bar_mut() {
+                    cb.backspace();
+                }
+                true
+            }
+            KeyCode::Tab => {
+                if let Some(cb) = editor.command_bar_mut() {
+                    cb.toggle_field();
+                }
+                true
+            }
+            _ => {
+                if let Some(t) = text {
+                    let is_printable = !t.chars().any(|c| c.is_control());
+                    if is_printable && !t.is_empty() {
+                        if let Some(cb) = editor.command_bar_mut() {
+                            cb.push_text(t);
+                        }
+                        return true;
+                    }
+                }
+                true
+            }
         }
     }
 

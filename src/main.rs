@@ -11,6 +11,7 @@ mod menu;
 mod renderer;
 mod state;
 mod ui;
+mod syntax;
 
 use app::App;
 use menu::{MenuAction, MenuHandler};

@@ -7,6 +7,7 @@ use crate::editor::Buffer;
 pub struct TextVertex {
     pub position: [f32; 2],
     pub uv: [f32; 2],
+    pub color: [f32; 4],
 }
 
 pub struct TextGeometry {
@@ -46,10 +47,8 @@ impl WrappedText {
         let text_area_width =
             layout.text_area.width - layout.text_area_padding_left - layout.text_area_padding_right;
 
-        let lines = buffer.lines();
-
-        for (logical_line_idx, line) in lines.iter().enumerate() {
-            if line.is_empty() {
+        for (logical_line_idx, line) in buffer.rope().lines().enumerate() {
+            if line.len_chars() == 0 {
                 wrapped_text.wrapped_lines.push(WrappedLine {
                     logical_line: logical_line_idx,
                     visual_line: wrapped_text.total_visual_lines,
@@ -110,12 +109,10 @@ impl WrappedText {
         col: usize,
         buffer: &Buffer,
     ) -> (usize, usize) {
-        let lines = buffer.lines();
-        if logical_line >= lines.len() {
+        if logical_line >= buffer.len_lines() {
             return (self.total_visual_lines.saturating_sub(1), 0);
         }
 
-        let _line = &lines[logical_line];
         let mut current_char = 0;
 
         for wrapped in &self.wrapped_lines {
@@ -188,6 +185,7 @@ impl TextGeometry {
         layout: &EditorLayout,
         wrapped_text: &WrappedText,
         scroll_offset: usize,
+        line_colors: Option<&std::collections::HashMap<usize, Vec<[f32; 4]>>>,
     ) -> Result<Self, String> {
         let mut geometry = TextGeometry::new();
 
@@ -201,18 +199,27 @@ impl TextGeometry {
         let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
         let last_visual = (first_visual + visible_lines).min(wrapped_text.total_visual_lines);
 
+        let mut cached_line_idx: Option<usize> = None;
+        let mut cached_line_chars: Vec<char> = Vec::new();
+
         for wrapped in &wrapped_text.wrapped_lines {
             if wrapped.visual_line < first_visual || wrapped.visual_line >= last_visual {
                 continue;
             }
 
-            let lines = buffer.lines();
-            if wrapped.logical_line >= lines.len() {
+            if wrapped.logical_line >= buffer.len_lines() {
                 continue;
             }
 
-            let line = &lines[wrapped.logical_line];
-            let line_chars: Vec<char> = line.chars().collect();
+            if cached_line_idx != Some(wrapped.logical_line) {
+                if let Some(line) = buffer.line_slice(wrapped.logical_line) {
+                    cached_line_chars = line.chars().collect();
+                    cached_line_idx = Some(wrapped.logical_line);
+                } else {
+                    continue;
+                }
+            }
+            let line_chars = &cached_line_chars;
 
             let base_x = layout.text_area.x + layout.text_area_padding_left;
             let screen_line = wrapped.visual_line.saturating_sub(first_visual);
@@ -221,10 +228,13 @@ impl TextGeometry {
 
             let mut x_offset = 0.0;
 
-            for ch in line_chars
+            let colors_for_line = line_colors.and_then(|m| m.get(&wrapped.logical_line));
+
+            for (i_in_line, ch) in line_chars
                 .iter()
                 .skip(wrapped.start_char)
                 .take(wrapped.end_char - wrapped.start_char)
+                .enumerate()
             {
                 if *ch == '\n' || *ch == '\r' {
                     break;
@@ -251,25 +261,33 @@ impl TextGeometry {
                     .pixel_to_ndc(glyph_x + entry.width as f32, glyph_y + entry.height as f32);
 
                 let vertex_start = geometry.vertices.len() as u32;
+                let char_idx_in_line = wrapped.start_char + i_in_line;
+                let color = colors_for_line
+                    .and_then(|v| v.get(char_idx_in_line).copied())
+                    .unwrap_or(super::layout::Colors::TEXT_COLOR);
 
                 geometry.vertices.push(TextVertex {
                     position: [x1, y1],
                     uv: [entry.uv_min_x, entry.uv_min_y],
+                    color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y1],
                     uv: [entry.uv_max_x, entry.uv_min_y],
+                    color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x2, y2],
                     uv: [entry.uv_max_x, entry.uv_max_y],
+                    color,
                 });
 
                 geometry.vertices.push(TextVertex {
                     position: [x1, y2],
                     uv: [entry.uv_min_x, entry.uv_max_y],
+                    color,
                 });
 
                 geometry.indices.push(vertex_start);

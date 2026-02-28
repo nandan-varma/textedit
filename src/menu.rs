@@ -20,6 +20,10 @@ pub mod actions {
         Paste,
         Delete,
         SelectAll,
+        Find,
+        FindNext,
+        FindPrev,
+        Replace,
         ToggleLineNumbers,
         ToggleStatusBar,
         About,
@@ -64,6 +68,10 @@ impl MenuHandler {
                     "paste" => Some(MenuAction::Paste),
                     "delete" => Some(MenuAction::Delete),
                     "select_all" => Some(MenuAction::SelectAll),
+                    "find" => Some(MenuAction::Find),
+                    "find_next" => Some(MenuAction::FindNext),
+                    "find_prev" => Some(MenuAction::FindPrev),
+                    "replace" => Some(MenuAction::Replace),
                     "toggle_line_numbers" => Some(MenuAction::ToggleLineNumbers),
                     "toggle_status_bar" => Some(MenuAction::ToggleStatusBar),
                     "about" => Some(MenuAction::About),
@@ -198,6 +206,40 @@ impl MenuHandler {
                 "select_all",
                 "Select All",
                 Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyA)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&muda::PredefinedMenuItem::separator())
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "find",
+                "Find…",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyF)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "find_next",
+                "Find Next",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyG)),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "find_prev",
+                "Find Previous",
+                Some(Accelerator::new(
+                    Some(Modifiers::SUPER | Modifiers::SHIFT),
+                    Code::KeyG,
+                )),
+            ))
+            .unwrap();
+        edit_menu
+            .append(&item_with_accel(
+                "replace",
+                "Replace…",
+                Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyH)),
             ))
             .unwrap();
 

@@ -1,4 +1,4 @@
-use ropey::Rope;
+use ropey::{Rope, RopeSlice};
 
 pub struct Buffer {
     content: Rope,
@@ -43,6 +43,26 @@ impl Buffer {
 
     pub fn line(&self, line_idx: usize) -> Option<String> {
         self.content.get_line(line_idx).map(|l| l.to_string())
+    }
+
+    /// Borrow the underlying rope for efficient iteration.
+    pub fn rope(&self) -> &Rope {
+        &self.content
+    }
+
+    pub fn line_slice(&self, line_idx: usize) -> Option<RopeSlice<'_>> {
+        if line_idx < self.content.len_lines() {
+            Some(self.content.line(line_idx))
+        } else {
+            None
+        }
+    }
+
+    pub fn line_len_chars(&self, line_idx: usize) -> usize {
+        self.content
+            .get_line(line_idx)
+            .map(|l| l.len_chars())
+            .unwrap_or(0)
     }
 
     pub fn char_to_line_col(&self, char_idx: usize) -> (usize, usize) {

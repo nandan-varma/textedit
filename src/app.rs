@@ -166,6 +166,18 @@ impl App {
                     editor.cursor_mut().set_selection_end(len);
                 }
             }
+            MenuAction::Find => {
+                editor.begin_find();
+            }
+            MenuAction::FindNext => {
+                let _ = editor.find_next();
+            }
+            MenuAction::FindPrev => {
+                let _ = editor.find_prev();
+            }
+            MenuAction::Replace => {
+                editor.begin_replace();
+            }
             MenuAction::ToggleLineNumbers => {
                 editor.toggle_line_numbers();
             }
@@ -182,11 +194,14 @@ impl App {
         }
 
         if let Some(state) = &mut self.state {
+            let status_override = editor.command_bar_status_text();
             if let Err(e) = state.update_geometry(
                 editor.buffer(),
                 editor.cursor(),
                 editor.show_line_numbers(),
                 editor.show_status_bar(),
+                status_override,
+                editor.file_path(),
             ) {
                 eprintln!("Failed to update geometry: {}", e);
             }
@@ -455,6 +470,8 @@ impl ApplicationHandler<MenuAction> for App {
                                     editor.cursor(),
                                     editor.show_line_numbers(),
                                     editor.show_status_bar(),
+                                    editor.command_bar_status_text(),
+                                    editor.file_path(),
                                 ) {
                                     eprintln!("Failed to update geometry: {}", e);
                                 }
@@ -499,6 +516,8 @@ impl ApplicationHandler<MenuAction> for App {
                             editor.cursor(),
                             editor.show_line_numbers(),
                             editor.show_status_bar(),
+                            editor.command_bar_status_text(),
+                            editor.file_path(),
                         ) {
                             eprintln!("Failed to update geometry after scroll: {}", e);
                         }
@@ -528,6 +547,8 @@ impl ApplicationHandler<MenuAction> for App {
                             editor.cursor(),
                             editor.show_line_numbers(),
                             editor.show_status_bar(),
+                            editor.command_bar_status_text(),
+                            editor.file_path(),
                         ) {
                             eprintln!("Failed to update geometry: {}", e);
                         }
@@ -551,6 +572,8 @@ impl ApplicationHandler<MenuAction> for App {
                         editor.cursor(),
                         editor.show_line_numbers(),
                         editor.show_status_bar(),
+                        editor.command_bar_status_text(),
+                        editor.file_path(),
                     ) {
                         eprintln!("Failed to update geometry: {}", e);
                     }
