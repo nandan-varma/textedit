@@ -1,36 +1,7 @@
-use muda::{
-    accelerator::{Accelerator, Code, Modifiers},
-    CheckMenuItem, Menu, MenuEvent, MenuItem,
-};
+use muda::{Menu, MenuEvent, accelerator::{Accelerator, Code, Modifiers}, PredefinedMenuItem};
 use winit::event_loop::EventLoopProxy;
-
-pub mod actions {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum MenuAction {
-        New,
-        Open,
-        Save,
-        SaveAs,
-        Close,
-        Quit,
-        Undo,
-        Redo,
-        Cut,
-        Copy,
-        Paste,
-        Delete,
-        SelectAll,
-        Find,
-        FindNext,
-        FindPrev,
-        Replace,
-        ToggleLineNumbers,
-        ToggleStatusBar,
-        About,
-    }
-}
-
-pub use actions::MenuAction;
+use crate::menu::actions::MenuAction;
+// use crate::menu::helpers::{item_with_accel, check};
 
 pub struct MenuHandler {
     menu: Menu,
@@ -54,7 +25,6 @@ impl MenuHandler {
             if let Ok(event) = MenuEvent::receiver().try_recv() {
                 let id = event.id().as_ref();
                 let action = match id {
-                    // ids are the lowercase strings we assign when creating items
                     "new" => Some(MenuAction::New),
                     "open" => Some(MenuAction::Open),
                     "save" => Some(MenuAction::Save),
@@ -85,13 +55,15 @@ impl MenuHandler {
     }
 
     pub fn build(&mut self) -> &Menu {
+        use crate::menu::helpers::item_with_accel;
+        use crate::menu::helpers::check;
         // App menu (macOS: becomes the app name menu)
         let app_menu = muda::Submenu::new("textedit", true);
         app_menu
             .append(&item_with_accel("about", "About textedit", None))
             .unwrap();
         app_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         app_menu
             .append(&item_with_accel(
@@ -118,7 +90,7 @@ impl MenuHandler {
             ))
             .unwrap();
         file_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         file_menu
             .append(&item_with_accel(
@@ -138,7 +110,7 @@ impl MenuHandler {
             ))
             .unwrap();
         file_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         file_menu
             .append(&item_with_accel(
@@ -168,7 +140,7 @@ impl MenuHandler {
             ))
             .unwrap();
         edit_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         edit_menu
             .append(&item_with_accel(
@@ -199,7 +171,7 @@ impl MenuHandler {
             ))
             .unwrap();
         edit_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         edit_menu
             .append(&item_with_accel(
@@ -209,7 +181,7 @@ impl MenuHandler {
             ))
             .unwrap();
         edit_menu
-            .append(&muda::PredefinedMenuItem::separator())
+            .append(&PredefinedMenuItem::separator())
             .unwrap();
         edit_menu
             .append(&item_with_accel(
@@ -276,33 +248,8 @@ impl MenuHandler {
         &self.menu
     }
 
-    #[cfg(target_os = "macos")]
-    pub fn attach_to_window(&self, _window: &winit::window::Window) {
-        self.menu.init_for_nsapp();
-    }
-
-    #[cfg(target_os = "windows")]
     pub fn attach_to_window(&self, window: &winit::window::Window) {
-        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        if let Ok(handle) = window.window_handle() {
-            if let RawWindowHandle::Win32(h) = handle.as_raw() {
-                unsafe {
-                    self.menu.init_for_hwnd(h.hwnd.get());
-                }
-            }
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn attach_to_window(&self, window: &winit::window::Window) {
-        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        if let Ok(handle) = window.window_handle() {
-            if let RawWindowHandle::Xlib(h) = handle.as_raw() {
-                unsafe {
-                    let _ = self.menu.init_for_xlib(h.window as *mut _, None);
-                }
-            }
-        }
+        crate::menu::platform::attach_to_window(&self.menu, window);
     }
 }
 
@@ -310,16 +257,4 @@ impl Default for MenuHandler {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn item(id: &str, label: &str) -> MenuItem {
-    MenuItem::with_id(id, label, true, None)
-}
-
-fn item_with_accel(id: &str, label: &str, accelerator: Option<Accelerator>) -> MenuItem {
-    MenuItem::with_id(id, label, true, accelerator)
-}
-
-fn check(id: &str, label: &str, checked: bool) -> CheckMenuItem {
-    CheckMenuItem::with_id(id, label, true, checked, None)
 }

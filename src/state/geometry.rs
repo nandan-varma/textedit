@@ -75,7 +75,7 @@ impl State {
                     show_status_bar: bool,
                 ) -> Option<(usize, usize)> {
                     let size = self.window.inner_size();
-                    let mut layout = crate::renderer::layout::EditorLayout::new(
+                    let layout = crate::renderer::layout::EditorLayout::new(
                         size.width as f32,
                         size.height as f32,
                         self.scaled_font_size,

@@ -1,0 +1,23 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuAction {
+    New,
+    Open,
+    Save,
+    SaveAs,
+    Close,
+    Quit,
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+    Delete,
+    SelectAll,
+    Find,
+    FindNext,
+    FindPrev,
+    Replace,
+    ToggleLineNumbers,
+    ToggleStatusBar,
+    About,
+}
