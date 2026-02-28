@@ -61,8 +61,8 @@ impl WrappedText {
                 continue;
             }
 
-            let mut x_offset = 0.0;
-            let mut char_count = 0;
+            let mut x_offset: f32;
+            let _char_count = 0;
             let line_chars: Vec<char> = line.chars().collect();
             let total_chars = line_chars.len();
             let mut start_char = 0;
@@ -115,7 +115,7 @@ impl WrappedText {
             return (self.total_visual_lines.saturating_sub(1), 0);
         }
 
-        let line = &lines[logical_line];
+        let _line = &lines[logical_line];
         let mut current_char = 0;
 
         for wrapped in &self.wrapped_lines {
@@ -205,7 +205,6 @@ impl TextGeometry {
                 + ascent;
 
             let mut x_offset = 0.0;
-            let mut char_idx = 0;
 
             for ch in line_chars
                 .iter()
@@ -220,14 +219,12 @@ impl TextGeometry {
                     Ok(e) => e.clone(),
                     Err(_) => {
                         x_offset += layout.char_width;
-                        char_idx += 1;
                         continue;
                     }
                 };
 
                 if entry.width == 0 || entry.height == 0 {
                     x_offset += entry.metrics.advance_width;
-                    char_idx += 1;
                     continue;
                 }
 
@@ -269,7 +266,6 @@ impl TextGeometry {
                 geometry.indices.push(vertex_start + 3);
 
                 x_offset += entry.metrics.advance_width;
-                char_idx += 1;
             }
         }
 

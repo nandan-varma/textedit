@@ -193,7 +193,6 @@ impl CursorGeometry {
             let mut x_offset = 0.0;
             let mut sel_start_x = 0.0;
             let mut sel_end_x = 0.0;
-            let mut char_idx = 0;
 
             // Only iterate through characters in this visual line
             let chars_in_visual = wrapped_end.saturating_sub(wrapped_start);
@@ -214,7 +213,6 @@ impl CursorGeometry {
                 }
 
                 x_offset += advance;
-                char_idx += 1;
             }
 
             let width = sel_end_x - sel_start_x;

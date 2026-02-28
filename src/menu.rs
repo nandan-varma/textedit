@@ -50,22 +50,23 @@ impl MenuHandler {
             if let Ok(event) = MenuEvent::receiver().try_recv() {
                 let id = event.id().as_ref();
                 let action = match id {
-                    "New" => Some(MenuAction::New),
-                    "Open" => Some(MenuAction::Open),
-                    "Save" => Some(MenuAction::Save),
-                    "Save As" => Some(MenuAction::SaveAs),
-                    "Close" => Some(MenuAction::Close),
-                    "Quit textedit" => Some(MenuAction::Quit),
-                    "Undo" => Some(MenuAction::Undo),
-                    "Redo" => Some(MenuAction::Redo),
-                    "Cut" => Some(MenuAction::Cut),
-                    "Copy" => Some(MenuAction::Copy),
-                    "Paste" => Some(MenuAction::Paste),
-                    "Delete" => Some(MenuAction::Delete),
-                    "Select All" => Some(MenuAction::SelectAll),
-                    "Show Line Numbers" => Some(MenuAction::ToggleLineNumbers),
-                    "Show Status Bar" => Some(MenuAction::ToggleStatusBar),
-                    "About textedit" => Some(MenuAction::About),
+                    // ids are the lowercase strings we assign when creating items
+                    "new" => Some(MenuAction::New),
+                    "open" => Some(MenuAction::Open),
+                    "save" => Some(MenuAction::Save),
+                    "save_as" => Some(MenuAction::SaveAs),
+                    "close" => Some(MenuAction::Close),
+                    "quit" => Some(MenuAction::Quit),
+                    "undo" => Some(MenuAction::Undo),
+                    "redo" => Some(MenuAction::Redo),
+                    "cut" => Some(MenuAction::Cut),
+                    "copy" => Some(MenuAction::Copy),
+                    "paste" => Some(MenuAction::Paste),
+                    "delete" => Some(MenuAction::Delete),
+                    "select_all" => Some(MenuAction::SelectAll),
+                    "toggle_line_numbers" => Some(MenuAction::ToggleLineNumbers),
+                    "toggle_status_bar" => Some(MenuAction::ToggleStatusBar),
+                    "about" => Some(MenuAction::About),
                     _ => None,
                 };
                 if let Some(a) = action {
@@ -269,14 +270,14 @@ impl Default for MenuHandler {
     }
 }
 
-fn item(_id: &str, label: &str) -> MenuItem {
-    MenuItem::new(label, true, None)
+fn item(id: &str, label: &str) -> MenuItem {
+    MenuItem::with_id(id, label, true, None)
 }
 
-fn item_with_accel(_id: &str, label: &str, accelerator: Option<Accelerator>) -> MenuItem {
-    MenuItem::new(label, true, accelerator)
+fn item_with_accel(id: &str, label: &str, accelerator: Option<Accelerator>) -> MenuItem {
+    MenuItem::with_id(id, label, true, accelerator)
 }
 
-fn check(_id: &str, label: &str, checked: bool) -> CheckMenuItem {
-    CheckMenuItem::new(label, checked, true, None)
+fn check(id: &str, label: &str, checked: bool) -> CheckMenuItem {
+    CheckMenuItem::with_id(id, label, true, checked, None)
 }
