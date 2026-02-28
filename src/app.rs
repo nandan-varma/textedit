@@ -8,6 +8,7 @@ use winit::window::WindowAttributes;
 
 use crate::editor::Editor;
 use crate::editor::KeyboardController;
+use crate::menu::{MenuAction, MenuHandler};
 use crate::state::State;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -20,6 +21,7 @@ pub struct App {
     state: Option<State>,
     editor: Option<Editor>,
     keyboard: KeyboardController,
+    menu_handler: Option<MenuHandler>,
     modifiers: ModifiersState,
     mouse_button_state: MouseButtonState,
     mouse_position: Option<(f64, f64)>,
@@ -35,6 +37,7 @@ impl App {
             state: None,
             editor: None,
             keyboard: KeyboardController::new(),
+            menu_handler: None,
             modifiers: ModifiersState::empty(),
             mouse_button_state: MouseButtonState::Released,
             mouse_position: None,
@@ -44,9 +47,235 @@ impl App {
             click_count: 0,
         }
     }
+
+    pub fn with_menu(mut self, menu_handler: MenuHandler) -> Self {
+        self.menu_handler = Some(menu_handler);
+        self
+    }
+
+    fn handle_menu_action(&mut self, action: MenuAction) {
+        let editor = match &mut self.editor {
+            Some(e) => e,
+            None => return,
+        };
+
+        match action {
+            MenuAction::New => {
+                editor.buffer_mut().clear();
+                editor.cursor_mut().set_position(0);
+                editor.history_mut().clear();
+            }
+            MenuAction::Open => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter(
+                        "Text Files",
+                        &[
+                            "txt", "md", "rs", "json", "toml", "yaml", "yml", "html", "css", "js",
+                            "ts",
+                        ],
+                    )
+                    .add_filter("All Files", &["*"])
+                    .pick_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    if let Ok(content) = std::fs::read_to_string(&path_str) {
+                        editor.buffer_mut().set_content(&content);
+                        editor.cursor_mut().set_position(0);
+                        editor.history_mut().clear();
+                        editor.set_file_path(path_str);
+                    }
+                }
+            }
+            MenuAction::Save => {
+                let needs_save_as = editor.file_path().is_none();
+                if !needs_save_as {
+                    let content = editor.buffer().as_str();
+                    if let Some(path) = editor.file_path() {
+                        if std::fs::write(path, content).is_ok() {
+                            editor.set_modified(false);
+                        }
+                    }
+                } else {
+                    let _ = editor;
+                    self.handle_menu_action(MenuAction::SaveAs);
+                    return;
+                }
+            }
+            MenuAction::SaveAs => {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter(
+                        "Text Files",
+                        &[
+                            "txt", "md", "rs", "json", "toml", "yaml", "yml", "html", "css", "js",
+                            "ts",
+                        ],
+                    )
+                    .add_filter("All Files", &["*"])
+                    .pick_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    let content = editor.buffer().as_str();
+                    if std::fs::write(&path_str, content).is_ok() {
+                        editor.set_file_path(path_str);
+                        editor.set_modified(false);
+                    }
+                }
+            }
+            MenuAction::Close => {
+                std::process::exit(0);
+            }
+            MenuAction::Undo => {
+                if let Some(op) = editor.history_mut().undo() {
+                    Self::apply_undo(editor, op);
+                }
+            }
+            MenuAction::Redo => {
+                if let Some(op) = editor.history_mut().redo() {
+                    Self::apply_redo(editor, op);
+                }
+            }
+            MenuAction::Cut => {
+                if let Some(sel) = editor.cursor().selection() {
+                    Self::cut_selection(editor, sel);
+                }
+            }
+            MenuAction::Copy => {
+                if let Some(sel) = editor.cursor().selection() {
+                    Self::copy_selection(editor, sel);
+                }
+            }
+            MenuAction::Paste => {
+                Self::paste_at_cursor(editor);
+            }
+            MenuAction::SelectAll => {
+                let len = editor.buffer().len_chars();
+                if len > 0 {
+                    editor.cursor_mut().set_selection_start(0);
+                    editor.cursor_mut().set_selection_end(len);
+                }
+            }
+            MenuAction::ToggleLineNumbers => {
+                // TODO: Implement toggle
+            }
+            MenuAction::ToggleStatusBar => {
+                // TODO: Implement toggle
+            }
+            MenuAction::About => {
+                // About handled by system
+            }
+        }
+
+        if let Some(state) = &mut self.state {
+            if let Err(e) = state.update_geometry(editor.buffer(), editor.cursor()) {
+                eprintln!("Failed to update geometry: {}", e);
+            }
+        }
+    }
+
+    fn apply_undo(editor: &mut Editor, op: crate::editor::operations::Operation) {
+        use crate::editor::operations::Operation;
+        match op {
+            Operation::Insert { position, text } => {
+                editor.buffer_mut().remove(position, text.len());
+                editor.cursor_mut().set_position(position);
+            }
+            Operation::Delete { position, text } => {
+                editor.buffer_mut().insert(position, &text);
+                editor.cursor_mut().set_position(position + text.len());
+            }
+        }
+    }
+
+    fn apply_redo(editor: &mut Editor, op: crate::editor::operations::Operation) {
+        use crate::editor::operations::Operation;
+        match op {
+            Operation::Insert { position, text } => {
+                editor.buffer_mut().insert(position, &text);
+                editor.cursor_mut().set_position(position + text.len());
+            }
+            Operation::Delete { position, text } => {
+                editor.buffer_mut().remove(position, text.len());
+                editor.cursor_mut().set_position(position);
+            }
+        }
+    }
+
+    fn copy_selection(editor: &Editor, sel: crate::editor::cursor::Selection) {
+        if sel.len() > 0 {
+            let text = editor
+                .buffer()
+                .as_str()
+                .chars()
+                .skip(sel.start)
+                .take(sel.len())
+                .collect::<String>();
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                let _ = clipboard.set_text(text);
+            }
+        }
+    }
+
+    fn cut_selection(editor: &mut Editor, sel: crate::editor::cursor::Selection) {
+        if sel.len() > 0 {
+            let text = editor
+                .buffer()
+                .as_str()
+                .chars()
+                .skip(sel.start)
+                .take(sel.len())
+                .collect::<String>();
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                let _ = clipboard.set_text(text.clone());
+            }
+            editor.buffer_mut().remove(sel.start, sel.len());
+            editor.cursor_mut().set_position(sel.start);
+            editor
+                .history_mut()
+                .push(crate::editor::operations::Operation::Delete {
+                    position: sel.start,
+                    text,
+                });
+        }
+    }
+
+    fn paste_at_cursor(editor: &mut Editor) {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Ok(text) = clipboard.get_text() {
+                if let Some(sel) = editor.cursor().selection() {
+                    if sel.len() > 0 {
+                        let txt = editor
+                            .buffer()
+                            .as_str()
+                            .chars()
+                            .skip(sel.start)
+                            .take(sel.len())
+                            .collect::<String>();
+                        editor.buffer_mut().remove(sel.start, sel.len());
+                        editor
+                            .history_mut()
+                            .push(crate::editor::operations::Operation::Delete {
+                                position: sel.start,
+                                text: txt,
+                            });
+                        editor.cursor_mut().set_position(sel.start);
+                    }
+                }
+
+                let pos = editor.cursor().position();
+                editor.buffer_mut().insert(pos, &text);
+                editor.cursor_mut().set_position(pos + text.len());
+                editor
+                    .history_mut()
+                    .push(crate::editor::operations::Operation::Insert {
+                        position: pos,
+                        text,
+                    });
+            }
+        }
+    }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<MenuAction> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
             let window_attributes = WindowAttributes::default().with_title("textedit - Untitled");
@@ -56,6 +285,11 @@ impl ApplicationHandler for App {
 
             let state = pollster::block_on(State::new(window.clone()))
                 .expect("Failed to initialize graphics state");
+
+            // Initialize menu handler if we have one
+            if let Some(ref mut menu_handler) = self.menu_handler {
+                menu_handler.attach_to_window(&window);
+            }
 
             let editor = Editor::new();
 
@@ -105,12 +339,10 @@ impl ApplicationHandler for App {
 
                 if button == MouseButton::Left {
                     self.mouse_button_state = if state == winit::event::ElementState::Pressed {
-                        // Mouse pressed - position cursor
                         if let (Some(editor), Some(state)) = (&mut self.editor, &mut self.state) {
                             if let Some((x, y)) = self.mouse_position {
                                 let now = Instant::now();
 
-                                // Determine click count
                                 let click_count = if let (Some(last_time), Some((last_x, last_y))) =
                                     (self.last_click_time, self.last_click_position)
                                 {
@@ -120,9 +352,9 @@ impl ApplicationHandler for App {
 
                                     if time_diff.as_millis() < 500 && pos_diff < 10.0 {
                                         if self.click_count >= 2 {
-                                            3 // triple click
+                                            3
                                         } else {
-                                            2 // double click
+                                            2
                                         }
                                     } else {
                                         1
@@ -135,24 +367,20 @@ impl ApplicationHandler for App {
                                 self.last_click_time = Some(now);
                                 self.last_click_position = Some((x, y));
 
-                                // Handle click based on count
                                 let (line, col) = state.get_char_at_position(x, y, editor.buffer());
                                 let char_idx =
                                     editor.buffer().line_col_to_char(line, col).unwrap_or(0);
 
                                 match click_count {
                                     2 => {
-                                        // Double click - select word
                                         let buffer = editor.buffer().clone();
                                         editor.cursor_mut().select_word_at_cursor(&buffer);
                                     }
                                     3 => {
-                                        // Triple click - select line
                                         let buffer = editor.buffer().clone();
                                         editor.cursor_mut().select_line(&buffer);
                                     }
                                     _ => {
-                                        // Single click - position cursor
                                         editor.cursor_mut().set_position(char_idx);
                                     }
                                 }
@@ -166,7 +394,6 @@ impl ApplicationHandler for App {
                         }
                         MouseButtonState::Pressed
                     } else {
-                        // Mouse released
                         self.is_dragging = false;
                         MouseButtonState::Released
                     };
@@ -199,6 +426,10 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: MenuAction) {
+        self.handle_menu_action(event);
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

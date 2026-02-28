@@ -75,6 +75,14 @@ impl Buffer {
     pub fn lines(&self) -> Vec<String> {
         self.content.lines().map(|l| l.to_string()).collect()
     }
+
+    pub fn clear(&mut self) {
+        self.content = Rope::new();
+    }
+
+    pub fn set_content(&mut self, text: &str) {
+        self.content = Rope::from(text);
+    }
 }
 
 impl Clone for Buffer {
