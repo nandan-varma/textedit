@@ -10,12 +10,10 @@ pub struct Selection {
 }
 
 impl Selection {
-    /// Create a normalized selection (start <= end).
+    /// Create a new selection with given endpoints. The values are stored
+    /// as provided; use `range()` or `len()` to query the normalized interval.
     pub fn new(start: usize, end: usize) -> Self {
-        Self {
-            start: start.min(end),
-            end: start.max(end),
-        }
+        Self { start, end }
     }
 
     /// Return the ordered endpoints as a (start, end) pair.
@@ -79,9 +77,8 @@ impl Cursor {
 
     pub fn extend_selection(&mut self, pos: usize) {
         if let Some(ref mut sel) = self.selection {
-            // keep original anchor and normalize
-            let anchor = sel.start;
-            *sel = Selection::new(anchor, pos);
+            // maintain anchor at sel.start, update end only
+            sel.end = pos;
         } else {
             self.selection = Some(Selection::new(self.position, pos));
         }
@@ -94,8 +91,7 @@ impl Cursor {
 
     pub fn set_selection_end(&mut self, pos: usize) {
         if let Some(ref mut sel) = self.selection {
-            let anchor = sel.start;
-            *sel = Selection::new(anchor, pos);
+            sel.end = pos;
         } else {
             self.selection = Some(Selection::new(self.position, pos));
         }
