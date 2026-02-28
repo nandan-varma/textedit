@@ -4,22 +4,21 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
+
 pub struct SyntaxHighlighter {
     ss: SyntaxSet,
     theme: Theme,
 }
 
 impl SyntaxHighlighter {
-    pub fn new() -> Self {
+    pub fn new(theme_name: &str) -> Self {
         let ss = SyntaxSet::load_defaults_newlines();
         let ts = ThemeSet::load_defaults();
-        // A stable dark theme shipped with syntect defaults.
         let theme = ts
             .themes
-            .get("base16-ocean.dark")
+            .get(theme_name)
             .cloned()
             .unwrap_or_else(|| ts.themes.values().next().cloned().unwrap());
-
         Self { ss, theme }
     }
 

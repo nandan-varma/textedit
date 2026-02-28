@@ -43,7 +43,7 @@ pub struct State {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
-        State::state_new_impl(window).await
+    pub async fn new(window: Arc<Window>, editor_config: crate::config::EditorConfig) -> anyhow::Result<Self> {
+        State::state_new_impl(window, editor_config).await
     }
 }

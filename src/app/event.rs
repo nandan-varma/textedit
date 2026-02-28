@@ -16,7 +16,9 @@ impl ApplicationHandler<MenuAction> for App {
             let window = event_loop.create_window(window_attributes).unwrap();
             let window = Arc::new(window);
 
-            let state = pollster::block_on(crate::state::State::new(window.clone()))
+            // TODO: Load config from file if available
+            let editor_config = crate::config::EditorConfig::default();
+            let state = pollster::block_on(crate::state::State::new(window.clone(), editor_config))
                 .expect("Failed to initialize graphics state");
 
             // Initialize menu handler if we have one
@@ -81,7 +83,8 @@ impl ApplicationHandler<MenuAction> for App {
                                 {
                                     let time_diff = now.duration_since(last_time);
                                     let pos_diff =
-                                        (((x as f64 - last_x as f64).powi(2) + (y as f64 - last_y as f64).powi(2)).sqrt());
+                                        (x as f64 - last_x as f64).powi(2) + (y as f64 - last_y as f64).powi(2);
+                                    let pos_diff = pos_diff.sqrt();
 
                                     if time_diff.as_millis() < 500 && pos_diff < 10.0 {
                                         if self.click_count >= 2 {

@@ -43,6 +43,7 @@ pub struct EditorConfig {
     pub tab_width: usize,
     pub use_spaces: bool,
     pub line_numbers: bool,
+    pub syntax_theme: String, // syntect theme name
 }
 
 impl Default for EditorConfig {
@@ -53,6 +54,7 @@ impl Default for EditorConfig {
             tab_width: 4,
             use_spaces: true,
             line_numbers: true,
+            syntax_theme: "base16-ocean.dark".to_string(),
         }
     }
 }

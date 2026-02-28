@@ -462,7 +462,7 @@ impl State {
                 multiview: None,
             })
         }
-    pub async fn state_new_impl(window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn state_new_impl(window: Arc<Window>, editor_config: crate::config::EditorConfig) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let scale_factor = window.scale_factor() as f32;
         let scaled_font_size = crate::state::BASE_FONT_SIZE * scale_factor;
@@ -650,7 +650,7 @@ impl State {
             scrollbar_vertex_buffer: None,
             scrollbar_index_buffer: None,
             scrollbar_index_count: 0,
-            syntax: crate::syntax::SyntaxHighlighter::new(),
+            syntax: crate::syntax::SyntaxHighlighter::new(&editor_config.syntax_theme),
         })
     }
 }

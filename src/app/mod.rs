@@ -71,16 +71,13 @@ impl App {
                 }
             }
             MenuAction::Save => {
-                let needs_save_as = editor.file_path().is_none();
-                if !needs_save_as {
+                if let Some(path) = editor.file_path() {
                     let content = editor.buffer().as_str();
-                    if let Some(path) = editor.file_path() {
-                        if std::fs::write(path, content).is_ok() {
-                            editor.set_modified(false);
-                        }
+                    if std::fs::write(path, content).is_ok() {
+                        editor.set_modified(false);
                     }
                 } else {
-                    let _ = editor;
+                    // No file path, so do Save As
                     self.handle_menu_action(MenuAction::SaveAs);
                     return;
                 }
@@ -95,7 +92,9 @@ impl App {
                         ],
                     )
                     .add_filter("All Files", &["*"])
-                    .pick_file()
+                    .set_directory(&std::env::current_dir().unwrap())
+                    .set_file_name(editor.file_path().map(|p| std::path::Path::new(p).file_name().and_then(|n| n.to_str()).unwrap_or("")).unwrap_or(""))
+                    .save_file()
                 {
                     let path_str = path.to_string_lossy().to_string();
                     let content = editor.buffer().as_str();
