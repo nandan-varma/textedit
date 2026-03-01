@@ -91,13 +91,13 @@ mod tests {
 
     #[test]
     fn test_syntax_highlighter_new_valid_theme() {
-        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let _highlighter = SyntaxHighlighter::new("base16-ocean.dark");
         assert!(true);
     }
 
     #[test]
     fn test_syntax_highlighter_new_invalid_theme_fallback() {
-        let highlighter = SyntaxHighlighter::new("nonexistent-theme-xyz");
+        let _highlighter = SyntaxHighlighter::new("nonexistent-theme-xyz");
         assert!(true);
     }
 

@@ -1,5 +1,7 @@
+#[allow(dead_code)]
 pub struct LineNumbers;
 
+#[allow(dead_code)]
 impl LineNumbers {
     pub fn width(line_count: usize) -> f32 {
         let digits = (line_count as f32).log10().floor() + 1.0;
@@ -11,6 +13,7 @@ impl LineNumbers {
     }
 }
 
+#[allow(dead_code)]
 pub struct StatusBar {
     line: usize,
     column: usize,
@@ -18,6 +21,7 @@ pub struct StatusBar {
     is_modified: bool,
 }
 
+#[allow(dead_code)]
 impl StatusBar {
     pub fn new(line: usize, column: usize, file_name: String, is_modified: bool) -> Self {
         Self {

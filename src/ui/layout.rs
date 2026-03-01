@@ -1,5 +1,6 @@
 use crate::ui::components::LineNumbers;
 
+#[allow(dead_code)]
 pub struct UILayout {
     pub line_numbers_width: f32,
     pub status_bar_height: f32,
@@ -9,6 +10,7 @@ pub struct UILayout {
     pub editor_height: f32,
 }
 
+#[allow(dead_code)]
 impl UILayout {
     pub fn new(window_width: f32, window_height: f32, line_count: usize) -> Self {
         let line_numbers_width = LineNumbers::width(line_count);

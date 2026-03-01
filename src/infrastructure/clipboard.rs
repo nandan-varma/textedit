@@ -41,13 +41,13 @@ mod tests {
 
     #[test]
     fn test_arboard_clipboard_new() {
-        let clipboard = ArboardClipboard::new();
+        let _clipboard = ArboardClipboard::new();
         assert!(true);
     }
 
     #[test]
     fn test_arboard_clipboard_default() {
-        let clipboard = ArboardClipboard::default();
+        let _clipboard = ArboardClipboard::default();
         assert!(true);
     }
 }

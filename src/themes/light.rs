@@ -24,5 +24,15 @@ pub fn light() -> Colors {
         gutter_separator: [0.80, 0.80, 0.78, 1.0],
         scrollbar_track: [0.92, 0.92, 0.90, 1.0],
         scrollbar_thumb: [0.80, 0.80, 0.78, 1.0],
+        // Modal colors
+        modal_background: [0.95, 0.95, 0.93, 1.0],
+        modal_border: [0.80, 0.80, 0.78, 1.0],
+        input_background: [0.98, 0.98, 0.96, 1.0],
+        input_border: [0.80, 0.80, 0.78, 1.0],
+        input_border_focused: [0.00, 0.45, 0.70, 1.0],
+        match_highlight: [1.0, 0.85, 0.30, 0.5],
+        current_match_highlight: [1.0, 0.70, 0.20, 0.8],
+        button_background: [0.92, 0.92, 0.90, 1.0],
+        button_hover: [0.85, 0.85, 0.83, 1.0],
     }
 }

@@ -2,6 +2,7 @@ use fontdue::Font;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct GlyphMetrics {
     pub advance_width: f32,
     pub advance_height: f32,
@@ -12,6 +13,7 @@ pub struct GlyphMetrics {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct AtlasEntry {
     pub x: u32,
     pub y: u32,
@@ -25,6 +27,7 @@ pub struct AtlasEntry {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct GlyphAtlas {
     font: Font,
     font_size: f32,
@@ -81,11 +84,13 @@ impl GlyphAtlas {
     }
 
     /// Get the descent (distance from baseline to bottom, typically negative)
+    #[allow(dead_code)]
     pub fn descent(&self) -> f32 {
         self.descent
     }
 
     /// Get the total line height based on font metrics
+    #[allow(dead_code)]
     pub fn line_height(&self) -> f32 {
         self.ascent - self.descent
     }
@@ -182,10 +187,12 @@ impl GlyphAtlas {
         &self.atlas_data
     }
 
+    #[allow(dead_code)]
     pub fn atlas_width(&self) -> u32 {
         self.atlas_width
     }
 
+    #[allow(dead_code)]
     pub fn atlas_height(&self) -> u32 {
         self.atlas_height
     }

@@ -1,4 +1,5 @@
 use super::super::init::State;
+use crate::ui::modal::ModalState;
 use wgpu::util::DeviceExt;
 
 impl State {
@@ -254,6 +255,149 @@ impl State {
                 self.scrollbar_index_count = scrollbar.indices.len() as u32;
             } else {
                 self.scrollbar_index_count = 0;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update modal geometry (called when modal state changes)
+    pub fn update_modal_geometry(
+        &mut self,
+        modal_state: &ModalState,
+        matches: &[(usize, usize)],
+        current_match: Option<usize>,
+        buffer: &crate::domain::Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+        cursor_visible: bool,
+    ) -> anyhow::Result<()> {
+        let size = self.window.inner_size();
+        let layout = crate::renderer::layout::EditorLayout::new(
+            size.width as f32,
+            size.height as f32,
+            self.scaled_font_size,
+            self.scale_factor,
+            show_line_numbers,
+            show_status_bar,
+        );
+        let colors = self.config.colors();
+
+        // Update match highlights
+        if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            let match_geometry = crate::renderer::cursor::CursorGeometry::build_match_highlights(
+                buffer,
+                matches,
+                current_match,
+                &layout,
+                glyph_atlas,
+                self.scroll_visual_offset,
+                &colors,
+            );
+
+            if !match_geometry.vertices.is_empty() {
+                self.match_highlight_vertex_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("match highlight vertex buffer"),
+                        contents: bytemuck::cast_slice(&match_geometry.vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    },
+                ));
+                self.match_highlight_index_buffer = Some(self.device.create_buffer_init(
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("match highlight index buffer"),
+                        contents: bytemuck::cast_slice(&match_geometry.indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    },
+                ));
+                self.match_highlight_index_count = match_geometry.indices.len() as u32;
+            } else {
+                self.match_highlight_index_count = 0;
+            }
+
+            // Update modal geometry if modal is open
+            match modal_state {
+                ModalState::None => {
+                    self.modal_bg_index_count = 0;
+                    self.modal_text_index_count = 0;
+                    // Clear hit test regions when modal is closed
+                    self.modal_button_regions.clear();
+                    self.modal_input_regions.clear();
+                    self.modal_rect = None;
+                }
+                ModalState::Find(find_modal) => {
+                    let modal_geometry = crate::renderer::modal::FindModalGeometry::build(
+                        find_modal,
+                        &layout,
+                        glyph_atlas,
+                        &colors,
+                        cursor_visible,
+                    );
+
+                    if !modal_geometry.bg_vertices.is_empty() {
+                        self.modal_bg_vertex_buffer = Some(self.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("modal bg vertex buffer"),
+                                contents: bytemuck::cast_slice(&modal_geometry.bg_vertices),
+                                usage: wgpu::BufferUsages::VERTEX,
+                            },
+                        ));
+                        self.modal_bg_index_buffer = Some(self.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("modal bg index buffer"),
+                                contents: bytemuck::cast_slice(&modal_geometry.bg_indices),
+                                usage: wgpu::BufferUsages::INDEX,
+                            },
+                        ));
+                        self.modal_bg_index_count = modal_geometry.bg_indices.len() as u32;
+                    }
+
+                    if !modal_geometry.text_vertices.is_empty() {
+                        self.modal_text_vertex_buffer = Some(self.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("modal text vertex buffer"),
+                                contents: bytemuck::cast_slice(&modal_geometry.text_vertices),
+                                usage: wgpu::BufferUsages::VERTEX,
+                            },
+                        ));
+                        self.modal_text_index_buffer = Some(self.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("modal text index buffer"),
+                                contents: bytemuck::cast_slice(&modal_geometry.text_indices),
+                                usage: wgpu::BufferUsages::INDEX,
+                            },
+                        ));
+                        self.modal_text_index_count = modal_geometry.text_indices.len() as u32;
+                    }
+
+                    // Store hit test regions for mouse click handling
+                    self.modal_button_regions = modal_geometry.button_regions;
+                    self.modal_input_regions = modal_geometry.input_regions;
+                    self.modal_rect = Some(modal_geometry.modal_rect);
+
+                    // Update atlas texture after modal rendering
+                    if let Some(atlas_texture) = &self.atlas_texture {
+                        self.queue.write_texture(
+                            wgpu::ImageCopyTexture {
+                                texture: atlas_texture,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d::ZERO,
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            glyph_atlas.atlas_data(),
+                            wgpu::ImageDataLayout {
+                                offset: 0,
+                                bytes_per_row: Some(crate::state::GLYPH_ATLAS_SIZE),
+                                rows_per_image: Some(crate::state::GLYPH_ATLAS_SIZE),
+                            },
+                            wgpu::Extent3d {
+                                width: crate::state::GLYPH_ATLAS_SIZE,
+                                height: crate::state::GLYPH_ATLAS_SIZE,
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                    }
+                }
             }
         }
 

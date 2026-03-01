@@ -3,8 +3,10 @@ use crate::ports::FileRepository;
 use std::fs;
 use std::path::Path;
 
+#[allow(dead_code)]
 pub struct NativeFileSystem;
 
+#[allow(dead_code)]
 impl NativeFileSystem {
     pub fn new() -> Self {
         Self

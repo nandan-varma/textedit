@@ -25,6 +25,54 @@ pub struct Colors {
     pub gutter_separator: [f32; 4],
     pub scrollbar_track: [f32; 4],
     pub scrollbar_thumb: [f32; 4],
+    // Modal colors
+    #[serde(default = "default_modal_background")]
+    pub modal_background: [f32; 4],
+    #[serde(default = "default_modal_border")]
+    pub modal_border: [f32; 4],
+    #[serde(default = "default_input_background")]
+    pub input_background: [f32; 4],
+    #[serde(default = "default_input_border")]
+    pub input_border: [f32; 4],
+    #[serde(default = "default_input_border_focused")]
+    pub input_border_focused: [f32; 4],
+    #[serde(default = "default_match_highlight")]
+    pub match_highlight: [f32; 4],
+    #[serde(default = "default_current_match_highlight")]
+    pub current_match_highlight: [f32; 4],
+    #[serde(default = "default_button_background")]
+    pub button_background: [f32; 4],
+    #[serde(default = "default_button_hover")]
+    pub button_hover: [f32; 4],
+}
+
+// Default functions for modal colors
+fn default_modal_background() -> [f32; 4] {
+    [0.2, 0.2, 0.2, 1.0]
+}
+fn default_modal_border() -> [f32; 4] {
+    [0.35, 0.35, 0.35, 1.0]
+}
+fn default_input_background() -> [f32; 4] {
+    [0.15, 0.15, 0.15, 1.0]
+}
+fn default_input_border() -> [f32; 4] {
+    [0.3, 0.3, 0.3, 1.0]
+}
+fn default_input_border_focused() -> [f32; 4] {
+    [0.0, 0.48, 0.8, 1.0]
+}
+fn default_match_highlight() -> [f32; 4] {
+    [0.5, 0.4, 0.0, 0.4]
+}
+fn default_current_match_highlight() -> [f32; 4] {
+    [0.6, 0.5, 0.0, 0.7]
+}
+fn default_button_background() -> [f32; 4] {
+    [0.25, 0.25, 0.25, 1.0]
+}
+fn default_button_hover() -> [f32; 4] {
+    [0.35, 0.35, 0.35, 1.0]
 }
 
 impl Default for Colors {
@@ -40,6 +88,16 @@ impl Default for Colors {
             gutter_separator: [0.25, 0.25, 0.25, 1.0],
             scrollbar_track: [0.16, 0.16, 0.16, 1.0],
             scrollbar_thumb: [0.35, 0.35, 0.35, 1.0],
+            // Modal colors
+            modal_background: default_modal_background(),
+            modal_border: default_modal_border(),
+            input_background: default_input_background(),
+            input_border: default_input_border(),
+            input_border_focused: default_input_border_focused(),
+            match_highlight: default_match_highlight(),
+            current_match_highlight: default_current_match_highlight(),
+            button_background: default_button_background(),
+            button_hover: default_button_hover(),
         }
     }
 }
@@ -70,9 +128,15 @@ impl Rect {
     pub fn bottom(&self) -> f32 {
         self.y + self.height
     }
+
+    /// Check if a point (x, y) is contained within this rect
+    pub fn contains(&self, x: f32, y: f32) -> bool {
+        x >= self.x && x <= self.right() && y >= self.y && y <= self.bottom()
+    }
 }
 
 /// Complete layout of the editor UI
+#[allow(dead_code)]
 pub struct EditorLayout {
     pub viewport_width: f32,
     pub viewport_height: f32,
@@ -184,6 +248,7 @@ impl EditorLayout {
     }
 
     /// Convert pixel width/height to NDC scale
+    #[allow(dead_code)]
     pub fn size_to_ndc(&self, width: f32, height: f32) -> [f32; 2] {
         let ndc_w = (width / self.viewport_width) * 2.0;
         let ndc_h = (height / self.viewport_height) * 2.0;
@@ -191,6 +256,7 @@ impl EditorLayout {
     }
 
     /// Get the pixel position for a text character at given line and column
+    #[allow(dead_code)]
     pub fn text_position(&self, line: usize, column: usize) -> [f32; 2] {
         let x = self.text_area.x + self.text_area_padding_left + (column as f32 * self.char_width);
         let y = self.text_area_padding_top + (line as f32 * self.line_height);
@@ -198,6 +264,7 @@ impl EditorLayout {
     }
 
     /// Get the pixel position for a line number
+    #[allow(dead_code)]
     pub fn line_number_position(&self, line: usize, num_digits: usize) -> [f32; 2] {
         // Right-align line numbers in gutter
         let text_width = num_digits as f32 * self.char_width;
@@ -207,6 +274,7 @@ impl EditorLayout {
     }
 
     /// Get cursor position in pixels for given line and column
+    #[allow(dead_code)]
     pub fn cursor_position(&self, line: usize, column: usize) -> [f32; 2] {
         self.text_position(line, column)
     }

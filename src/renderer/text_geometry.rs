@@ -16,6 +16,7 @@ pub struct TextGeometry {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct WrappedLine {
     pub logical_line: usize,
     pub visual_line: usize,
@@ -144,6 +145,7 @@ impl WrappedText {
     }
 
     /// Get logical position from visual line and column
+    #[allow(dead_code)]
     pub fn get_logical_position(
         &self,
         visual_line: usize,

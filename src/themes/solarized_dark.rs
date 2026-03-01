@@ -24,5 +24,15 @@ pub fn solarized_dark() -> Colors {
         gutter_separator: [0.10, 0.22, 0.25, 1.0],
         scrollbar_track: [0.03, 0.22, 0.26, 1.0],
         scrollbar_thumb: [0.13, 0.28, 0.32, 1.0],
+        // Modal colors
+        modal_background: [0.03, 0.22, 0.26, 1.0],
+        modal_border: [0.13, 0.28, 0.32, 1.0],
+        input_background: [0.00, 0.17, 0.21, 1.0],
+        input_border: [0.13, 0.28, 0.32, 1.0],
+        input_border_focused: [0.38, 0.54, 0.68, 1.0],
+        match_highlight: [0.50, 0.35, 0.00, 0.4],
+        current_match_highlight: [0.65, 0.45, 0.00, 0.7],
+        button_background: [0.05, 0.25, 0.30, 1.0],
+        button_hover: [0.10, 0.30, 0.35, 1.0],
     }
 }

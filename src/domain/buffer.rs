@@ -11,6 +11,7 @@ impl Buffer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_str(text: &str) -> Self {
         Self {
             content: Rope::from(text),

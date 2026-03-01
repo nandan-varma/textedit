@@ -194,6 +194,21 @@ impl State {
             scrollbar_index_buffer: None,
             scrollbar_index_count: 0,
             syntax: crate::syntax::SyntaxHighlighter::new(&syntax_theme),
+            // Modal buffers
+            modal_bg_vertex_buffer: None,
+            modal_bg_index_buffer: None,
+            modal_bg_index_count: 0,
+            modal_text_vertex_buffer: None,
+            modal_text_index_buffer: None,
+            modal_text_index_count: 0,
+            // Match highlight buffers
+            match_highlight_vertex_buffer: None,
+            match_highlight_index_buffer: None,
+            match_highlight_index_count: 0,
+            // Modal hit test regions
+            modal_button_regions: Vec::new(),
+            modal_input_regions: Vec::new(),
+            modal_rect: None,
         })
     }
     // Helper to get current UI colors from config
@@ -248,6 +263,21 @@ pub struct State {
     pub scrollbar_index_buffer: Option<wgpu::Buffer>,
     pub scrollbar_index_count: u32,
     pub syntax: crate::syntax::SyntaxHighlighter,
+    // Modal rendering buffers
+    pub modal_bg_vertex_buffer: Option<wgpu::Buffer>,
+    pub modal_bg_index_buffer: Option<wgpu::Buffer>,
+    pub modal_bg_index_count: u32,
+    pub modal_text_vertex_buffer: Option<wgpu::Buffer>,
+    pub modal_text_index_buffer: Option<wgpu::Buffer>,
+    pub modal_text_index_count: u32,
+    // Match highlight buffers
+    pub match_highlight_vertex_buffer: Option<wgpu::Buffer>,
+    pub match_highlight_index_buffer: Option<wgpu::Buffer>,
+    pub match_highlight_index_count: u32,
+    // Modal hit test regions
+    pub modal_button_regions: Vec<(crate::ui::modal::find_modal::FindButton, crate::renderer::layout::Rect)>,
+    pub modal_input_regions: Vec<(crate::ui::modal::find_modal::FindField, crate::renderer::layout::Rect)>,
+    pub modal_rect: Option<crate::renderer::layout::Rect>,
 }
 
 impl State {

@@ -1,6 +1,4 @@
 use crate::domain::{Buffer, Cursor, Operation, OperationHistory};
-use crate::error::Result;
-use crate::ports::{Clipboard, FileRepository};
 
 pub struct EditorService {
     buffer: Buffer,
@@ -11,6 +9,7 @@ pub struct EditorService {
     show_line_numbers: bool,
     show_status_bar: bool,
     last_find_query: Option<String>,
+    last_replace_text: Option<String>,
 }
 
 impl EditorService {
@@ -24,6 +23,7 @@ impl EditorService {
             show_line_numbers: true,
             show_status_bar: true,
             last_find_query: None,
+            last_replace_text: None,
         }
     }
 
@@ -57,6 +57,7 @@ impl EditorService {
         self.file_path.as_deref()
     }
 
+    #[allow(dead_code)]
     pub fn is_modified(&self) -> bool {
         self.is_modified
     }
@@ -117,6 +118,194 @@ impl EditorService {
 
     pub fn find_query(&self) -> Option<&str> {
         self.last_find_query.as_deref()
+    }
+
+    pub fn set_replace_text(&mut self, text: Option<String>) {
+        self.last_replace_text = text;
+    }
+
+    pub fn replace_text(&self) -> Option<&str> {
+        self.last_replace_text.as_deref()
+    }
+
+    /// Find all matches of the current query in the buffer
+    /// Returns a vector of (start, end) character indices
+    pub fn find_all_matches(&self) -> Vec<(usize, usize)> {
+        let query = match &self.last_find_query {
+            Some(q) if !q.is_empty() => q,
+            _ => return Vec::new(),
+        };
+
+        let mut matches = Vec::new();
+        let content = self.buffer.as_str();
+        let qlen = query.chars().count();
+
+        let mut byte_pos = 0;
+        let mut char_pos = 0;
+
+        while let Some(rel_byte_idx) = content[byte_pos..].find(query) {
+            let match_byte_start = byte_pos + rel_byte_idx;
+            let chars_before = content[byte_pos..match_byte_start].chars().count();
+            let start_char = char_pos + chars_before;
+
+            matches.push((start_char, start_char + qlen));
+
+            // Move past this match
+            let query_bytes = query.len();
+            byte_pos = match_byte_start + query_bytes;
+            char_pos = start_char + qlen;
+        }
+
+        matches
+    }
+
+    /// Get the total number of matches for the current query
+    #[allow(dead_code)]
+    pub fn match_count(&self) -> usize {
+        self.find_all_matches().len()
+    }
+
+    /// Get the index (1-based) of the current match based on cursor position
+    /// Returns None if no matches or cursor is not on a match
+    pub fn current_match_index(&self) -> Option<usize> {
+        let matches = self.find_all_matches();
+        if matches.is_empty() {
+            return None;
+        }
+
+        let cursor_pos = self.cursor.position();
+
+        // Find which match the cursor is at or closest to (after)
+        for (i, (start, end)) in matches.iter().enumerate() {
+            if cursor_pos >= *start && cursor_pos <= *end {
+                return Some(i + 1); // 1-based index
+            }
+            if cursor_pos < *start {
+                return Some(i + 1);
+            }
+        }
+
+        // Cursor is after all matches, wrap to first
+        Some(1)
+    }
+
+    /// Replace the current selection if it matches the find query
+    /// Returns true if a replacement was made
+    pub fn replace_current(&mut self) -> bool {
+        let query = match &self.last_find_query {
+            Some(q) if !q.is_empty() => q.clone(),
+            _ => return false,
+        };
+
+        let replacement = self.last_replace_text.clone().unwrap_or_default();
+
+        // Check if current selection matches the query
+        let selection = match self.cursor.selection() {
+            Some(sel) if !sel.is_empty() => sel,
+            _ => return false,
+        };
+
+        let (start, end) = selection.range();
+        let selected_text: String = self
+            .buffer
+            .as_str()
+            .chars()
+            .skip(start)
+            .take(end - start)
+            .collect();
+
+        if selected_text != query {
+            return false;
+        }
+
+        // Delete the selection
+        self.buffer.remove(start, end - start);
+        self.history.push(Operation::Delete {
+            position: start,
+            text: selected_text,
+        });
+        self.is_modified = true;
+
+        // Insert the replacement
+        if !replacement.is_empty() {
+            self.buffer.insert(start, &replacement);
+            self.history.push(Operation::Insert {
+                position: start,
+                text: replacement.clone(),
+            });
+        }
+
+        // Position cursor after the replacement
+        self.cursor
+            .set_position(start + replacement.chars().count());
+
+        true
+    }
+
+    /// Replace the current match and find the next one
+    /// Returns true if a replacement was made
+    pub fn replace_and_find_next(&mut self) -> bool {
+        let replaced = self.replace_current();
+        if replaced {
+            self.find_next();
+        }
+        replaced
+    }
+
+    /// Replace all occurrences of the query with the replacement text
+    /// Returns the number of replacements made
+    pub fn replace_all(&mut self) -> usize {
+        let query = match &self.last_find_query {
+            Some(q) if !q.is_empty() => q.clone(),
+            _ => return 0,
+        };
+
+        let replacement = self.last_replace_text.clone().unwrap_or_default();
+        let qlen = query.chars().count();
+        let rlen = replacement.chars().count();
+
+        // Find all matches first (we need to replace from end to start to maintain positions)
+        let mut matches = self.find_all_matches();
+        if matches.is_empty() {
+            return 0;
+        }
+
+        // Reverse to replace from end to start (so positions remain valid)
+        matches.reverse();
+
+        for (start, end) in &matches {
+            let deleted_text: String = self
+                .buffer
+                .as_str()
+                .chars()
+                .skip(*start)
+                .take(*end - *start)
+                .collect();
+
+            self.buffer.remove(*start, qlen);
+            self.history.push(Operation::Delete {
+                position: *start,
+                text: deleted_text,
+            });
+
+            if !replacement.is_empty() {
+                self.buffer.insert(*start, &replacement);
+                self.history.push(Operation::Insert {
+                    position: *start,
+                    text: replacement.clone(),
+                });
+            }
+        }
+
+        self.is_modified = true;
+        let count = matches.len();
+
+        // Position cursor at the start of where the last replacement was made
+        if let Some((start, _)) = matches.last() {
+            self.cursor.set_position(*start + rlen);
+        }
+
+        count
     }
 
     pub fn new_file(&mut self) {

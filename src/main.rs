@@ -10,6 +10,7 @@ mod renderer;
 mod state;
 mod syntax;
 pub mod themes;
+mod ui;
 
 use interface::App;
 use menu::MenuHandler;

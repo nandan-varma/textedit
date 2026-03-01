@@ -24,5 +24,15 @@ pub fn dracula() -> Colors {
         gutter_separator: [0.20, 0.22, 0.28, 1.0],
         scrollbar_track: [0.13, 0.14, 0.19, 1.0],
         scrollbar_thumb: [0.25, 0.27, 0.33, 1.0],
+        // Modal colors
+        modal_background: [0.12, 0.13, 0.18, 1.0],
+        modal_border: [0.25, 0.27, 0.33, 1.0],
+        input_background: [0.07, 0.08, 0.13, 1.0],
+        input_border: [0.25, 0.27, 0.33, 1.0],
+        input_border_focused: [0.55, 0.35, 0.90, 1.0],
+        match_highlight: [0.55, 0.35, 0.00, 0.4],
+        current_match_highlight: [0.70, 0.45, 0.00, 0.7],
+        button_background: [0.18, 0.19, 0.24, 1.0],
+        button_hover: [0.25, 0.27, 0.33, 1.0],
     }
 }

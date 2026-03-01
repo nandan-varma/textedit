@@ -1,13 +1,13 @@
 use crate::error::Result;
 use crate::ports::FileRepository;
-use std::collections::HashMap;
 use std::path::Path;
-use std::sync::RwLock;
 
+#[allow(dead_code)]
 pub struct FileService<F: FileRepository> {
     repository: F,
 }
 
+#[allow(dead_code)]
 impl<F: FileRepository> FileService<F> {
     pub fn new(repository: F) -> Self {
         Self { repository }
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn test_file_service_new() {
         let mock = MockFileRepository::new();
-        let service = FileService::new(mock);
+        let _service = FileService::new(mock);
         assert!(true);
     }
 

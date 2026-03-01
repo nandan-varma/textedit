@@ -72,8 +72,8 @@ impl ScrollbarGeometry {
         let ratio = (scroll_offset.min(max_offset) as f32) / (max_offset as f32);
 
         let thumb_min_height = layout.line_height.max(8.0);
-        let thumb_height =
-            (track.height * (visible_lines as f32 / total_visual_lines as f32)).max(thumb_min_height);
+        let thumb_height = (track.height * (visible_lines as f32 / total_visual_lines as f32))
+            .max(thumb_min_height);
 
         let travel = (track.height - thumb_height).max(0.0);
         let thumb_top = track.y + ratio * travel;
@@ -112,4 +112,3 @@ impl ScrollbarGeometry {
         geom
     }
 }
-

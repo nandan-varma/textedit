@@ -24,5 +24,15 @@ pub fn gruvbox_dark() -> Colors {
         gutter_separator: [0.22, 0.20, 0.17, 1.0],
         scrollbar_track: [0.18, 0.16, 0.13, 1.0],
         scrollbar_thumb: [0.28, 0.25, 0.20, 1.0],
+        // Modal colors
+        modal_background: [0.20, 0.18, 0.15, 1.0],
+        modal_border: [0.28, 0.25, 0.20, 1.0],
+        input_background: [0.15, 0.13, 0.11, 1.0],
+        input_border: [0.28, 0.25, 0.20, 1.0],
+        input_border_focused: [0.60, 0.45, 0.10, 1.0],
+        match_highlight: [0.60, 0.40, 0.00, 0.4],
+        current_match_highlight: [0.75, 0.50, 0.00, 0.7],
+        button_background: [0.22, 0.20, 0.17, 1.0],
+        button_hover: [0.28, 0.25, 0.20, 1.0],
     }
 }

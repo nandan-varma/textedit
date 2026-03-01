@@ -24,6 +24,7 @@ impl Selection {
         s == e
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         let (s, e) = self.range();
         e - s

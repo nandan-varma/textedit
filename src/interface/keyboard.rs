@@ -1,8 +1,7 @@
 use crate::application::EditorService;
 use crate::domain::operations::Operation;
-use crate::error::Result;
 use crate::infrastructure::clipboard::ArboardClipboard;
-use crate::ports::Clipboard;
+use crate::ports::clipboard_port::Clipboard;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 

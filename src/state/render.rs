@@ -37,7 +37,8 @@ impl State {
             // 1. Render UI backgrounds (gutter, status bar)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
-                if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer) {
+                if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer)
+                {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.ui_bg_index_count, 0, 0..1);
@@ -101,6 +102,18 @@ impl State {
                     render_pass.draw_indexed(0..self.scrollbar_index_count, 0, 0..1);
                 }
 
+                // Match highlights (rendered before cursor/selection so they appear behind)
+                if let (Some(vb), Some(ib)) = (
+                    &self.match_highlight_vertex_buffer,
+                    &self.match_highlight_index_buffer,
+                ) {
+                    if self.match_highlight_index_count > 0 {
+                        render_pass.set_vertex_buffer(0, vb.slice(..));
+                        render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..self.match_highlight_index_count, 0, 0..1);
+                    }
+                }
+
                 // Cursor and selection
                 if let (Some(vb), Some(ib)) =
                     (&self.cursor_vertex_buffer, &self.cursor_index_buffer)
@@ -108,6 +121,38 @@ impl State {
                     render_pass.set_vertex_buffer(0, vb.slice(..));
                     render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                     render_pass.draw_indexed(0..self.cursor_index_count, 0, 0..1);
+                }
+            }
+
+            // 6. Render modal overlay (on top of everything)
+            if let Some(pipeline) = &self.color_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let (Some(vb), Some(ib)) =
+                    (&self.modal_bg_vertex_buffer, &self.modal_bg_index_buffer)
+                {
+                    if self.modal_bg_index_count > 0 {
+                        render_pass.set_vertex_buffer(0, vb.slice(..));
+                        render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..self.modal_bg_index_count, 0, 0..1);
+                    }
+                }
+            }
+
+            // 7. Render modal text
+            if let Some(pipeline) = &self.text_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let Some(bind_group) = &self.atlas_bind_group {
+                    render_pass.set_bind_group(0, bind_group, &[]);
+                }
+                if let (Some(vb), Some(ib)) = (
+                    &self.modal_text_vertex_buffer,
+                    &self.modal_text_index_buffer,
+                ) {
+                    if self.modal_text_index_count > 0 {
+                        render_pass.set_vertex_buffer(0, vb.slice(..));
+                        render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..self.modal_text_index_count, 0, 0..1);
+                    }
                 }
             }
         }

@@ -1,5 +1,6 @@
-use muda::{MenuItem, CheckMenuItem, accelerator::Accelerator};
+use muda::{accelerator::Accelerator, CheckMenuItem, MenuItem};
 
+#[allow(dead_code)]
 pub fn item(id: &str, label: &str) -> MenuItem {
     MenuItem::with_id(id, label, true, None)
 }

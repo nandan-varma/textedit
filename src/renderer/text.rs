@@ -1,10 +1,12 @@
 use crate::config::EditorConfig;
 use crate::domain::Buffer;
 
+#[allow(dead_code)]
 pub struct TextRenderer {
     config: EditorConfig,
 }
 
+#[allow(dead_code)]
 impl TextRenderer {
     pub fn new(config: EditorConfig) -> Self {
         Self { config }

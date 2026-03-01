@@ -24,5 +24,15 @@ pub fn one_dark() -> Colors {
         gutter_separator: [0.22, 0.24, 0.29, 1.0],
         scrollbar_track: [0.18, 0.20, 0.25, 1.0],
         scrollbar_thumb: [0.28, 0.30, 0.35, 1.0],
+        // Modal colors
+        modal_background: [0.20, 0.22, 0.27, 1.0],
+        modal_border: [0.28, 0.30, 0.35, 1.0],
+        input_background: [0.16, 0.18, 0.23, 1.0],
+        input_border: [0.28, 0.30, 0.35, 1.0],
+        input_border_focused: [0.38, 0.54, 0.78, 1.0],
+        match_highlight: [0.55, 0.40, 0.00, 0.4],
+        current_match_highlight: [0.70, 0.50, 0.00, 0.7],
+        button_background: [0.22, 0.24, 0.29, 1.0],
+        button_hover: [0.28, 0.30, 0.35, 1.0],
     }
 }

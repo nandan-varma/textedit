@@ -295,7 +295,160 @@ impl CursorGeometry {
         geometry
     }
 
+    /// Build geometry for rendering match highlights
+    /// This is used to highlight all search matches in the document
+    pub fn build_match_highlights(
+        buffer: &Buffer,
+        matches: &[(usize, usize)],
+        current_match: Option<usize>,
+        layout: &EditorLayout,
+        glyph_atlas: &mut GlyphAtlas,
+        scroll_offset: usize,
+        colors: &super::layout::Colors,
+    ) -> Self {
+        let mut geometry = CursorGeometry::new();
+
+        if matches.is_empty() {
+            return geometry;
+        }
+
+        let wrapped_text =
+            super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
+        let base_x = layout.text_area.x + layout.text_area_padding_left;
+        let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
+
+        for (match_idx, (start, end)) in matches.iter().enumerate() {
+            let is_current = current_match == Some(match_idx);
+            let highlight_color = if is_current {
+                colors.current_match_highlight
+            } else {
+                colors.match_highlight
+            };
+
+            // Get line positions
+            let (start_line, start_col) = buffer.char_to_line_col(*start);
+            let (end_line, end_col) = buffer.char_to_line_col(*end);
+
+            // For each wrapped line, check if it contains part of this match
+            for wrapped in &wrapped_text.wrapped_lines {
+                let wrapped_logical = wrapped.logical_line;
+                let wrapped_start = wrapped.start_char;
+                let wrapped_end = wrapped.end_char;
+                let visual_line = wrapped.visual_line;
+
+                // Skip if not visible
+                if visual_line < first_visual {
+                    continue;
+                }
+                let screen_line = visual_line.saturating_sub(first_visual);
+
+                // Skip if line is not in the match range
+                if wrapped_logical < start_line || wrapped_logical > end_line {
+                    continue;
+                }
+
+                // Get line content
+                if wrapped_logical >= buffer.len_lines() {
+                    continue;
+                }
+
+                let line_chars: Vec<char> = buffer
+                    .line_slice(wrapped_logical)
+                    .map(|l| l.chars().collect())
+                    .unwrap_or_default();
+                let line_len = line_chars.len();
+
+                // Calculate which characters of this visual line are in the match
+                let (match_start_in_line, match_end_in_line) =
+                    if wrapped_logical == start_line && wrapped_logical == end_line {
+                        (start_col, end_col)
+                    } else if wrapped_logical == start_line {
+                        (start_col, line_len)
+                    } else if wrapped_logical == end_line {
+                        (0, end_col)
+                    } else {
+                        (0, line_len)
+                    };
+
+                // Check overlap with this wrapped segment
+                let seg_start = wrapped_start;
+                let seg_end = wrapped_end;
+
+                let overlap_start = match_start_in_line.max(seg_start);
+                let overlap_end = match_end_in_line.min(seg_end);
+
+                if overlap_start >= overlap_end {
+                    continue;
+                }
+
+                // Calculate x positions relative to wrapped line start
+                let mut x_offset = 0.0;
+                let mut sel_start_x = 0.0;
+                let mut sel_end_x = 0.0;
+
+                for i in seg_start..seg_end {
+                    if i >= line_len {
+                        break;
+                    }
+
+                    let ch = line_chars[i];
+                    let advance = glyph_atlas.char_advance_width(ch);
+
+                    if i == overlap_start {
+                        sel_start_x = x_offset;
+                    }
+                    if i < overlap_end {
+                        sel_end_x = x_offset + advance;
+                    }
+
+                    x_offset += advance;
+                }
+
+                let width = sel_end_x - sel_start_x;
+                if width <= 0.0 {
+                    continue;
+                }
+
+                let x = base_x + sel_start_x;
+                let y = layout.text_area_padding_top + (screen_line as f32 * layout.line_height);
+                let height = layout.line_height;
+
+                let [x1, y1] = layout.pixel_to_ndc(x, y);
+                let [x2, y2] = layout.pixel_to_ndc(x + width, y + height);
+
+                let base_vertex = geometry.vertices.len() as u32;
+
+                geometry.vertices.push(CursorVertex {
+                    position: [x1, y1],
+                    color: highlight_color,
+                });
+                geometry.vertices.push(CursorVertex {
+                    position: [x2, y1],
+                    color: highlight_color,
+                });
+                geometry.vertices.push(CursorVertex {
+                    position: [x2, y2],
+                    color: highlight_color,
+                });
+                geometry.vertices.push(CursorVertex {
+                    position: [x1, y2],
+                    color: highlight_color,
+                });
+
+                geometry.indices.push(base_vertex);
+                geometry.indices.push(base_vertex + 1);
+                geometry.indices.push(base_vertex + 2);
+                geometry.indices.push(base_vertex);
+                geometry.indices.push(base_vertex + 2);
+                geometry.indices.push(base_vertex + 3);
+            }
+        }
+
+        geometry
+    }
+
     /// Build geometry for rendering cursor (legacy, without wrapping)
+    #[allow(dead_code)]
     pub fn build(
         cursor: &Cursor,
         buffer: &Buffer,

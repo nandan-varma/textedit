@@ -59,9 +59,8 @@ impl LineNumbersGeometry {
             let text_width: f32 = line_str.len() as f32 * layout.char_width;
             let base_x = layout.gutter.width - layout.line_number_padding_right - text_width;
             let screen_line = visual_line.saturating_sub(first_visual);
-            let baseline_y = layout.text_area_padding_top
-                + (screen_line as f32 * layout.line_height)
-                + ascent;
+            let baseline_y =
+                layout.text_area_padding_top + (screen_line as f32 * layout.line_height) + ascent;
 
             let mut x_offset = 0.0;
 
@@ -128,6 +127,7 @@ impl LineNumbersGeometry {
     }
 
     /// Build geometry for rendering line numbers (legacy, without wrapping)
+    #[allow(dead_code)]
     pub fn build(
         total_lines: usize,
         glyph_atlas: &mut GlyphAtlas,

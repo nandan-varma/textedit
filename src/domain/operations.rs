@@ -62,10 +62,12 @@ impl OperationHistory {
         }
     }
 
+    #[allow(dead_code)]
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
+    #[allow(dead_code)]
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
