@@ -23,12 +23,12 @@ impl State {
             show_status_bar,
         );
         if let Some(glyph_atlas) = &self.glyph_atlas {
-            let mut atlas_clone = glyph_atlas.clone();
+            // Use immutable reference - no clone needed since hit_test uses cached glyph widths
             layout.hit_test(
                 x as f32,
                 y as f32,
                 buffer,
-                &mut atlas_clone,
+                glyph_atlas,
                 self.scroll_visual_offset,
             )
         } else {

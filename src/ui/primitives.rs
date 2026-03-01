@@ -11,6 +11,7 @@ pub struct Point {
 }
 
 impl Point {
+    #[inline]
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
@@ -26,6 +27,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[inline]
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {
             x,
@@ -35,6 +37,7 @@ impl Rect {
         }
     }
 
+    #[inline]
     pub fn from_points(top_left: Point, bottom_right: Point) -> Self {
         Self {
             x: top_left.x,
@@ -44,6 +47,7 @@ impl Rect {
         }
     }
 
+    #[inline]
     pub fn contains(&self, point: Point) -> bool {
         point.x >= self.x
             && point.x <= self.x + self.width
@@ -51,18 +55,22 @@ impl Rect {
             && point.y <= self.y + self.height
     }
 
+    #[inline]
     pub fn right(&self) -> f32 {
         self.x + self.width
     }
 
+    #[inline]
     pub fn bottom(&self) -> f32 {
         self.y + self.height
     }
 
+    #[inline]
     pub fn center(&self) -> Point {
         Point::new(self.x + self.width / 2.0, self.y + self.height / 2.0)
     }
 
+    #[inline]
     pub fn inset(&self, amount: f32) -> Self {
         Self {
             x: self.x + amount,

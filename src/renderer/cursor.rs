@@ -1,5 +1,6 @@
 use super::glyph_cache::GlyphAtlas;
 use super::layout::EditorLayout;
+use super::text_geometry::WrappedText;
 use crate::domain::{Buffer, Cursor};
 
 #[repr(C)]
@@ -23,6 +24,7 @@ impl CursorGeometry {
     }
 
     /// Build geometry for rendering cursor with selection highlighting and scrolling.
+    /// Accepts pre-computed `WrappedText` to avoid redundant wrap_buffer calls.
     pub fn build_with_wrap(
         cursor: &Cursor,
         buffer: &Buffer,
@@ -30,6 +32,7 @@ impl CursorGeometry {
         glyph_atlas: &mut GlyphAtlas,
         scroll_offset: usize,
         colors: &super::layout::Colors,
+        wrapped_text: &WrappedText,
     ) -> Self {
         let mut geometry = CursorGeometry::new();
 
@@ -44,6 +47,7 @@ impl CursorGeometry {
                     scroll_offset,
                     geometry,
                     colors,
+                    wrapped_text,
                 );
             }
         }
@@ -52,8 +56,6 @@ impl CursorGeometry {
         let cursor_pos = cursor.position();
         let (logical_line, col) = buffer.char_to_line_col(cursor_pos);
 
-        let wrapped_text =
-            super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
         let (visual_line, visual_col) = wrapped_text.get_visual_position(logical_line, col, buffer);
 
         let base_x = layout.text_area.x + layout.text_area_padding_left;
@@ -153,6 +155,7 @@ impl CursorGeometry {
         scroll_offset: usize,
         mut geometry: Self,
         colors: &super::layout::Colors,
+        wrapped_text: &WrappedText,
     ) -> Self {
         let sel = cursor.selection().unwrap();
         let start = sel.start.min(sel.end);
@@ -161,9 +164,6 @@ impl CursorGeometry {
         // Get character positions
         let (start_line, start_col) = buffer.char_to_line_col(start);
         let (end_line, end_col) = buffer.char_to_line_col(end);
-
-        let wrapped_text =
-            super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
 
         let base_x = layout.text_area.x + layout.text_area_padding_left;
         let selection_color = colors.selection_color;
@@ -296,7 +296,8 @@ impl CursorGeometry {
     }
 
     /// Build geometry for rendering match highlights
-    /// This is used to highlight all search matches in the document
+    /// This is used to highlight all search matches in the document.
+    /// Accepts pre-computed `WrappedText` to avoid redundant wrap_buffer calls.
     pub fn build_match_highlights(
         buffer: &Buffer,
         matches: &[(usize, usize)],
@@ -305,6 +306,7 @@ impl CursorGeometry {
         glyph_atlas: &mut GlyphAtlas,
         scroll_offset: usize,
         colors: &super::layout::Colors,
+        wrapped_text: &WrappedText,
     ) -> Self {
         let mut geometry = CursorGeometry::new();
 
@@ -312,8 +314,6 @@ impl CursorGeometry {
             return geometry;
         }
 
-        let wrapped_text =
-            super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, layout);
         let base_x = layout.text_area.x + layout.text_area_padding_left;
         let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
 

@@ -5,6 +5,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    #[inline]
     pub fn new() -> Self {
         Self {
             content: Rope::new(),
@@ -30,14 +31,17 @@ impl Buffer {
         }
     }
 
+    #[inline]
     pub fn get_char(&self, char_idx: usize) -> Option<char> {
         self.content.get_char(char_idx)
     }
 
+    #[inline]
     pub fn len_chars(&self) -> usize {
         self.content.len_chars()
     }
 
+    #[inline]
     pub fn len_lines(&self) -> usize {
         self.content.len_lines()
     }
@@ -46,10 +50,12 @@ impl Buffer {
         self.content.get_line(line_idx).map(|l| l.to_string())
     }
 
+    #[inline]
     pub fn rope(&self) -> &Rope {
         &self.content
     }
 
+    #[inline]
     pub fn line_slice(&self, line_idx: usize) -> Option<RopeSlice<'_>> {
         if line_idx < self.content.len_lines() {
             Some(self.content.line(line_idx))
@@ -89,6 +95,20 @@ impl Buffer {
 
     pub fn as_str(&self) -> String {
         self.content.to_string()
+    }
+
+    /// Get a character at an index, returning None if out of bounds.
+    /// More efficient than as_str() for sparse access patterns.
+    #[inline]
+    pub fn char_at(&self, char_idx: usize) -> Option<char> {
+        self.content.get_char(char_idx)
+    }
+
+    /// Check if a character at an index satisfies a predicate.
+    /// Returns false for out-of-bounds indices.
+    #[inline]
+    pub fn char_matches(&self, char_idx: usize, predicate: impl Fn(char) -> bool) -> bool {
+        self.content.get_char(char_idx).map_or(false, predicate)
     }
 
     pub fn clear(&mut self) {

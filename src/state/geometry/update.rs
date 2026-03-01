@@ -22,9 +22,9 @@ impl State {
             show_status_bar,
         );
 
-        // Update UI backgrounds
-        let colors = &crate::renderer::layout::Colors::default();
-        let ui_bg = crate::renderer::ui_background::UIBackgroundGeometry::build(&layout, colors);
+        // Update UI backgrounds - use configured theme colors
+        let colors = self.config.colors();
+        let ui_bg = crate::renderer::ui_background::UIBackgroundGeometry::build(&layout, &colors);
         if !ui_bg.vertices.is_empty() {
             self.ui_bg_vertex_buffer = Some(self.device.create_buffer_init(
                 &wgpu::util::BufferInitDescriptor {
@@ -90,7 +90,7 @@ impl State {
                 &wrapped_text,
                 self.scroll_visual_offset,
                 Some(&line_colors),
-                colors,
+                &colors,
             )
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -122,7 +122,7 @@ impl State {
                 &layout,
                 &wrapped_text,
                 self.scroll_visual_offset,
-                colors,
+                &colors,
             )
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -152,7 +152,7 @@ impl State {
                 buffer,
                 glyph_atlas,
                 &layout,
-                colors,
+                &colors,
                 status_bar_override,
             )
             .map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -177,37 +177,43 @@ impl State {
                 self.status_bar_index_count = 0;
             }
 
-            // Update atlas texture
-            if let Some(atlas_texture) = &self.atlas_texture {
-                self.queue.write_texture(
-                    wgpu::ImageCopyTexture {
-                        texture: atlas_texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    glyph_atlas.atlas_data(),
-                    wgpu::ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(crate::state::GLYPH_ATLAS_SIZE),
-                        rows_per_image: Some(crate::state::GLYPH_ATLAS_SIZE),
-                    },
-                    wgpu::Extent3d {
-                        width: crate::state::GLYPH_ATLAS_SIZE,
-                        height: crate::state::GLYPH_ATLAS_SIZE,
-                        depth_or_array_layers: 1,
-                    },
-                );
+            // Update atlas texture only if new glyphs were rasterized
+            // This avoids uploading the entire 1MB+ texture on every frame
+            if glyph_atlas.is_dirty() {
+                if let Some(atlas_texture) = &self.atlas_texture {
+                    self.queue.write_texture(
+                        wgpu::ImageCopyTexture {
+                            texture: atlas_texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        glyph_atlas.atlas_data(),
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(crate::state::GLYPH_ATLAS_SIZE),
+                            rows_per_image: Some(crate::state::GLYPH_ATLAS_SIZE),
+                        },
+                        wgpu::Extent3d {
+                            width: crate::state::GLYPH_ATLAS_SIZE,
+                            height: crate::state::GLYPH_ATLAS_SIZE,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                }
+                glyph_atlas.mark_clean();
             }
 
             // Update cursor, selection, and scrollbar geometry using current scrolling state
+            // Pass the pre-computed wrapped_text to avoid redundant wrap_buffer calls
             let cursor_geom = crate::renderer::cursor::CursorGeometry::build_with_wrap(
                 cursor,
                 buffer,
                 &layout,
                 glyph_atlas,
                 self.scroll_visual_offset,
-                colors,
+                &colors,
+                &wrapped_text,
             );
             if !cursor_geom.vertices.is_empty() {
                 self.cursor_vertex_buffer = Some(self.device.create_buffer_init(
@@ -232,7 +238,7 @@ impl State {
             let visible_lines = layout.visible_lines().max(1);
             let scrollbar = crate::renderer::scrollbar::ScrollbarGeometry::build(
                 &layout,
-                colors,
+                &colors,
                 self.total_visual_lines,
                 visible_lines,
                 self.scroll_visual_offset,
@@ -285,6 +291,13 @@ impl State {
 
         // Update match highlights
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
+            // Compute wrapped text once for this update
+            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(
+                buffer,
+                glyph_atlas,
+                &layout,
+            );
+
             let match_geometry = crate::renderer::cursor::CursorGeometry::build_match_highlights(
                 buffer,
                 matches,
@@ -293,6 +306,7 @@ impl State {
                 glyph_atlas,
                 self.scroll_visual_offset,
                 &colors,
+                &wrapped_text,
             );
 
             if !match_geometry.vertices.is_empty() {
@@ -375,27 +389,30 @@ impl State {
                     self.modal_input_regions = modal_geometry.input_regions;
                     self.modal_rect = Some(modal_geometry.modal_rect);
 
-                    // Update atlas texture after modal rendering
-                    if let Some(atlas_texture) = &self.atlas_texture {
-                        self.queue.write_texture(
-                            wgpu::ImageCopyTexture {
-                                texture: atlas_texture,
-                                mip_level: 0,
-                                origin: wgpu::Origin3d::ZERO,
-                                aspect: wgpu::TextureAspect::All,
-                            },
-                            glyph_atlas.atlas_data(),
-                            wgpu::ImageDataLayout {
-                                offset: 0,
-                                bytes_per_row: Some(crate::state::GLYPH_ATLAS_SIZE),
-                                rows_per_image: Some(crate::state::GLYPH_ATLAS_SIZE),
-                            },
-                            wgpu::Extent3d {
-                                width: crate::state::GLYPH_ATLAS_SIZE,
-                                height: crate::state::GLYPH_ATLAS_SIZE,
-                                depth_or_array_layers: 1,
-                            },
-                        );
+                    // Update atlas texture only if new glyphs were rasterized
+                    if glyph_atlas.is_dirty() {
+                        if let Some(atlas_texture) = &self.atlas_texture {
+                            self.queue.write_texture(
+                                wgpu::ImageCopyTexture {
+                                    texture: atlas_texture,
+                                    mip_level: 0,
+                                    origin: wgpu::Origin3d::ZERO,
+                                    aspect: wgpu::TextureAspect::All,
+                                },
+                                glyph_atlas.atlas_data(),
+                                wgpu::ImageDataLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(crate::state::GLYPH_ATLAS_SIZE),
+                                    rows_per_image: Some(crate::state::GLYPH_ATLAS_SIZE),
+                                },
+                                wgpu::Extent3d {
+                                    width: crate::state::GLYPH_ATLAS_SIZE,
+                                    height: crate::state::GLYPH_ATLAS_SIZE,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                        }
+                        glyph_atlas.mark_clean();
                     }
                 }
             }

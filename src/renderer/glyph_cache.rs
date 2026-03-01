@@ -41,6 +41,9 @@ pub struct GlyphAtlas {
     padding: u32,
     ascent: f32,  // Distance from baseline to top of tallest glyph
     descent: f32, // Distance from baseline to bottom of lowest glyph (negative)
+    /// Tracks whether the atlas texture has been modified since last GPU upload.
+    /// This avoids uploading the entire 1MB+ atlas texture on every frame.
+    dirty: bool,
 }
 
 impl GlyphAtlas {
@@ -75,24 +78,41 @@ impl GlyphAtlas {
             padding: 2,
             ascent,
             descent,
+            dirty: true, // Start dirty to ensure initial upload
         })
     }
 
     /// Get the ascent (distance from baseline to top)
+    #[inline]
     pub fn ascent(&self) -> f32 {
         self.ascent
     }
 
     /// Get the descent (distance from baseline to bottom, typically negative)
+    #[inline]
     #[allow(dead_code)]
     pub fn descent(&self) -> f32 {
         self.descent
     }
 
     /// Get the total line height based on font metrics
+    #[inline]
     #[allow(dead_code)]
     pub fn line_height(&self) -> f32 {
         self.ascent - self.descent
+    }
+
+    /// Returns true if the atlas has been modified since the last `mark_clean()` call.
+    /// Used to avoid unnecessary GPU texture uploads.
+    #[inline]
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Marks the atlas as clean after GPU upload.
+    #[inline]
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
     }
 
     pub fn get_or_rasterize(&mut self, ch: char) -> Result<&AtlasEntry, String> {
@@ -106,7 +126,8 @@ impl GlyphAtlas {
         let height = metrics.height as u32;
 
         if width == 0 || height == 0 {
-            // Space or invisible character
+            // Space or invisible character - still mark dirty since we're adding to cache
+            self.dirty = true;
             let entry = AtlasEntry {
                 x: 0,
                 y: 0,
@@ -179,30 +200,56 @@ impl GlyphAtlas {
         self.row_height = self.row_height.max(height);
         self.current_x += width + self.padding * 2;
 
+        // Mark atlas as dirty since we added new glyph data
+        self.dirty = true;
         self.cache.insert(ch, entry);
         Ok(&self.cache[&ch])
     }
 
+    #[inline]
     pub fn atlas_data(&self) -> &[u8] {
         &self.atlas_data
     }
 
+    #[inline]
     #[allow(dead_code)]
     pub fn atlas_width(&self) -> u32 {
         self.atlas_width
     }
 
+    #[inline]
     #[allow(dead_code)]
     pub fn atlas_height(&self) -> u32 {
         self.atlas_height
     }
 
     /// Get the advance width of a character (how much to move pen after drawing)
+    #[inline]
     pub fn char_advance_width(&mut self, ch: char) -> f32 {
         if let Ok(entry) = self.get_or_rasterize(ch) {
             entry.metrics.advance_width
         } else {
             self.font_size * 0.6 // fallback
         }
+    }
+
+    /// Get the advance width of a character without rasterizing.
+    /// Returns cached value if available, otherwise a fallback estimate.
+    /// This is useful for hit testing where we don't want to mutate the atlas.
+    #[inline]
+    pub fn char_advance_width_cached(&self, ch: char) -> f32 {
+        if let Some(entry) = self.cache.get(&ch) {
+            entry.metrics.advance_width
+        } else {
+            // Fallback: estimate based on font size
+            // Most characters are about 0.6 * font_size wide
+            self.font_size * 0.6
+        }
+    }
+
+    /// Check if a glyph is already cached
+    #[inline]
+    pub fn is_cached(&self, ch: char) -> bool {
+        self.cache.contains_key(&ch)
     }
 }

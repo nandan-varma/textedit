@@ -1,283 +1,195 @@
 # AGENTS.md - Guidelines for AI Agents
 
-This file contains guidelines for AI coding agents working in this repository.
-
----
+Guidelines for AI coding agents working in this Rust text editor repository.
 
 ## 1. Build, Lint, and Test Commands
 
-### Build Commands
+### Build
 ```bash
-# Build the project
-cargo build
-
-# Build in release mode
-cargo build --release
-
-# Run the application
-cargo run
-
-# Run in release mode
-cargo run --release
+cargo build              # Debug build
+cargo build --release    # Release build
+cargo run                # Run debug
+cargo run --release      # Run release
 ```
 
-### Linting Commands
+### Lint
 ```bash
-# Run clippy for all warnings
-cargo clippy
-
-# Run clippy with strict warnings
-cargo clippy -- -W clippy::all
-
-# Run cargo check (faster than full build)
-cargo check
-
-# Format code
-cargo fmt
-
-# Check formatting without making changes
-cargo fmt -- --check
+cargo check              # Fast type checking (use frequently)
+cargo clippy             # Lint warnings
+cargo fmt                # Format code
+cargo fmt -- --check     # Check formatting only
 ```
 
-### Testing Commands
+### Test
 ```bash
-# Run all tests
-cargo test
-
-# Run a single test by name
-cargo test test_name
-
-# Run tests with output
-cargo test -- --nocapture
-
-# Run doc tests
-cargo test --doc
+cargo test                                    # Run all tests (142 tests)
+cargo test test_buffer_insert                 # Run single test by name
+cargo test buffer::tests::                    # Run tests in a module
+cargo test -- --nocapture                     # Show println! output
+cargo test --doc                              # Run doc tests only
 ```
-
-### Documentation
-```bash
-# Generate documentation
-cargo doc
-
-# Generate documentation without building dependencies
-cargo doc --no-deps
-```
-
----
 
 ## 2. Code Style Guidelines
 
-### General Principles
-- Prefer clear, idiomatic Rust over clever code
-- Keep functions small and focused on single responsibility
-- Avoid premature abstraction - prefer concrete types until patterns emerge
-- Use meaningful names that convey intent
-
-### Naming Conventions
-
-**Variables and Functions**
-- Use `snake_case` for variables and function names
-- Prefer descriptive names over abbreviations (except: `buf`, `idx`, `val`, `err`)
-- Prefix unused variables with underscore: `_unused_var`
-
-**Types**
-- Use `PascalCase` for structs, enums, and type aliases
-- Use `CamelCase` for trait names
-
-**Modules**
-- Use `snake_case` for module names
-- One module per file, or use `mod.rs` for module directories
-
-### Imports
-
-**Organize imports in this order:**
-1. Standard library imports (`std::`, `core::`)
-2. External crate imports (alphabetical)
+### Import Order
+1. Standard library (`std::`, `core::`)
+2. External crates (alphabetical)
 3. Local imports (`crate::`, `super::`)
 
-**Example:**
 ```rust
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use winit::event::WindowEvent;
 use wgpu::{Device, Queue};
+use winit::event::WindowEvent;
 
 use crate::domain::Buffer;
 use crate::error::Result;
 ```
 
-**Avoid:**
-- Wildcard imports (`use crate::foo::*`) except for re-exports
-- Deep import paths when module-level imports suffice
+### Naming Conventions
+- **Functions/variables**: `snake_case`
+- **Types/traits**: `PascalCase`
+- **Modules**: `snake_case`
+- **Constants**: `SCREAMING_SNAKE_CASE`
+- **Unused variables**: prefix with `_`
 
 ### Error Handling
+Use `thiserror` for error types. Prefer `crate::error::Result<T>` over `anyhow::Result`:
 
-**Use the project's custom error types:**
 ```rust
 use crate::error::{EditorError, Result};
 
-// Return Result for functions that can fail
-fn some_function() -> Result<String> {
-    // Use ? operator for propagation
-    let content = std::fs::read_to_string("file.txt")
-        .map_err(EditorError::IoError)?;
-    Ok(content)
+fn load_file(path: &str) -> Result<String> {
+    std::fs::read_to_string(path).map_err(EditorError::IoError)
 }
 ```
 
-**Avoid:**
-- Using `unwrap()` or `expect()` in production code
-- Using `anyhow::Result` for internal functions (use `crate::error::Result`)
-- Silently ignoring errors with `let _ = ...`
+**Rules:**
+- Use `?` for error propagation
+- Avoid `unwrap()`/`expect()` in production code
+- Don't silently ignore errors with `let _ = ...`
 
 ### Types and Ownership
+- Prefer `&str` over `&String` for parameters
+- Use `Arc<T>` for shared ownership across threads
+- Prefer `&mut T` over `RefCell<T>`
+- Avoid excessive `.clone()` - use references where possible
 
-**Prefer:**
-- Value types over reference types when possible
-- `&str` over `&String` for function parameters
-- `impl Trait` for return types when concrete type doesn't matter
-- `Arc<T>` for shared ownership across threads
-- `&mut T` for mutable references (avoid `RefCell` unless necessary)
-
-**Avoid:**
-- Excessive cloning (prefer references when possible)
-- `dyn Trait` when generic bounds work
-- Unnecessary `Box<T>` allocation
-
-### Structs and Enums
-
-**Use struct shorthand for simple constructors:**
+### Common Derives
 ```rust
-// Good
-impl Editor {
-    pub fn new() -> Self {
-        Self {
-            buffer: Buffer::new(),
-            cursor: Cursor::new(),
-        }
-    }
-}
-
-// Avoid unnecessary verbosity
-impl Editor {
-    pub fn new() -> Self {
-        return Self {
-            buffer: Buffer::new(),
-            cursor: Cursor::new(),
-        };
-    }
-}
-```
-
-**Use enum for state variants:**
-```rust
-#[derive(Clone, Copy, PartialEq)]
-pub enum MouseButtonState {
-    Released,
-    Pressed,
-}
-```
-
-### Pattern Matching
-
-**Use exhaustive pattern matching:**
-```rust
-match action {
-    MenuAction::Save => { /* ... */ }
-    MenuAction::Open => { /* ... */ }
-    MenuAction::Quit => { /* ... */ }
-}
-```
-
-**Use `_` for ignored cases:**
-```rust
-fn handle_key(event: KeyEvent) {
-    match event.state {
-        ElementState::Pressed => { /* ... */ }
-        ElementState::Released => { /* do nothing */ }
-    }
-}
+#[derive(Debug, Clone, Copy, PartialEq)]  // For simple value types
+#[derive(Debug, Clone)]                    // For complex types
 ```
 
 ### Documentation
+Document public APIs with `///` comments. Skip obvious getters/setters.
 
-**Document public APIs:**
-```rust
-/// Creates a new editor with default configuration.
-pub fn new() -> Self
+## 3. Architecture
 
-/// Highlights the given buffer for display.
-///
-/// Returns a HashMap mapping line indices to color vectors.
-pub fn highlight(&self, buffer: &Buffer) -> HashMap<usize, Vec<[f32; 4]>>
-```
-
-**Avoid:**
-- Commenting obvious code
-- Leaving commented-out code (delete it, use git if needed)
-
-### Architecture
-
-This project follows Clean Architecture:
+Clean Architecture with dependency rules:
 
 ```
 src/
-├── domain/        # Pure business logic (no external deps)
-├── ports/        # Trait definitions (interfaces)
-├── application/  # Use cases & orchestration
+├── domain/         # Pure business logic (Buffer, Cursor, Operations)
+│                   # NO external dependencies except std
+├── ports/          # Trait definitions (interfaces)
+├── application/    # Use cases (EditorService, FileService)
 ├── infrastructure/ # External implementations
-├── interface/    # UI & event handling
-├── renderer/     # GPU rendering
-├── state/        # GPU state
-├── menu/         # Menu handling
-├── config/        # Configuration
-├── syntax/        # Syntax highlighting
-├── themes/        # Theme definitions
-└── error.rs      # Error types
+├── interface/      # Event handling (App, KeyboardController)
+├── ui/             # UI primitives, widgets, modals
+│   ├── primitives.rs  # Point, Rect, Color, Primitive enum
+│   ├── widget.rs      # Widget trait
+│   ├── widgets/       # Button, Input, Label
+│   ├── modal/         # FindModal, InputField
+│   └── layers.rs      # Z-index layer management
+├── renderer/       # GPU rendering (wgpu)
+│   ├── layout.rs      # EditorLayout, Rect, Colors
+│   ├── glyph_cache.rs # Font atlas (fontdue)
+│   └── modal/         # Modal geometry builders
+├── state/          # GPU state management
+├── menu/           # Native menu bar (muda)
+├── syntax.rs       # Syntax highlighting (syntect)
+└── error.rs        # EditorError enum
 ```
 
 **Dependency Rules:**
-- Domain → No dependencies (except std)
-- Ports → Domain
+- Domain → std only
 - Application → Domain + Ports
-- Infrastructure → Domain + Ports
-- Interface → Application + Domain
+- Interface/UI → Application + Domain
+- Renderer/State → All layers (GPU boundary)
 
----
+## 4. Key Patterns
 
-## 3. Project-Specific Notes
+### Buffer (ropey)
+```rust
+let buffer = Buffer::from_str("hello");
+buffer.insert(5, " world");
+let (line, col) = buffer.char_to_line_col(char_idx);
+```
 
-### Testing Strategy
-- Currently no unit tests exist - write tests for new code
-- Focus on testing domain logic (Buffer, Cursor, Operations)
-- Use integration tests for application layer
+### UI Primitives
+Widgets produce primitives; renderer converts to GPU geometry:
+```rust
+pub enum Primitive {
+    Rect { rect: Rect, color: Color },
+    RoundedRect { rect: Rect, color: Color, radius: f32 },
+    Text { position: Point, text: String, color: Color, size: f32 },
+    // ...
+}
+```
 
-### GPU/Rendering
-- Rendering code lives in `renderer/` and `state/` modules
-- Uses wgpu for graphics
-- Font rendering via fontdue crate
+### Modal Hit Testing
+Button/input regions stored in State for mouse click handling:
+```rust
+// In State struct
+pub modal_button_regions: Vec<(FindButton, Rect)>,
+pub modal_input_regions: Vec<(FindField, Rect)>,
+```
 
-### Editor Core
-- Buffer uses `ropey` for efficient text storage
-- Cursor/Selection in `domain/cursor.rs`
-- Undo/Redo in `domain/operations.rs`
+### Event Flow
+1. `winit` events → `App::window_event()`
+2. Modal checks first (hit test buttons/inputs)
+3. Keyboard → `KeyboardController` → `EditorService`
+4. Updates → `State::update_geometry()` → GPU buffers
 
----
+## 5. Testing
 
-## 4. Common Tasks
+Tests live alongside code in `#[cfg(test)]` modules:
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-### Adding a New Domain Type
-1. Add to `src/domain/` module
-2. Export in `src/domain/mod.rs`
-3. Write unit tests
+    #[test]
+    fn test_buffer_insert() {
+        let mut buffer = Buffer::new();
+        buffer.insert(0, "hello");
+        assert_eq!(buffer.len_chars(), 5);
+    }
+}
+```
 
-### Adding Infrastructure
-1. Define trait in `src/ports/`
-2. Implement in `src/infrastructure/`
-3. Use in application layer via trait
+**Focus areas:**
+- Domain logic (Buffer, Cursor, Operations)
+- Widget behavior (Input, Button)
+- Modal state transitions
 
-### Adding UI Features
-1. Add to `src/interface/` module
-2. Coordinate with application services
-3. Update state/renderer as needed
+## 6. Common Tasks
+
+### Adding a Widget
+1. Create `src/ui/widgets/my_widget.rs`
+2. Implement `Widget` trait
+3. Export in `src/ui/widgets/mod.rs`
+4. Add tests
+
+### Adding Modal Functionality
+1. Update `FindModal` in `src/ui/modal/find_modal.rs`
+2. Add button to `FindButton` enum if needed
+3. Update geometry in `src/renderer/modal/find_geometry.rs`
+4. Handle in `App::handle_modal_action()`
+
+### Debugging Rendering
+- Check `update_geometry()` is called after state changes
+- Verify buffer counts: `modal_bg_index_count`, etc.
+- Use `cargo run` and Ctrl+F to test modal

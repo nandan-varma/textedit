@@ -219,13 +219,11 @@ impl KeyboardController {
         if ctrl && shift {
             match code {
                 KeyCode::ArrowLeft => {
-                    let buf = editor.buffer().clone();
-                    editor.cursor_mut().extend_selection_to_word_start(&buf);
+                    editor.cursor_extend_selection_to_word_start();
                     return true;
                 }
                 KeyCode::ArrowRight => {
-                    let buf = editor.buffer().clone();
-                    editor.cursor_mut().extend_selection_to_word_end(&buf);
+                    editor.cursor_extend_selection_to_word_end();
                     return true;
                 }
                 KeyCode::ArrowUp => {
@@ -244,13 +242,11 @@ impl KeyboardController {
         if ctrl && !shift {
             match code {
                 KeyCode::ArrowLeft => {
-                    let buf = editor.buffer().clone();
-                    editor.cursor_mut().move_to_word_start(&buf);
+                    editor.cursor_move_to_word_start();
                     return true;
                 }
                 KeyCode::ArrowRight => {
-                    let buf = editor.buffer().clone();
-                    editor.cursor_mut().move_to_word_end(&buf);
+                    editor.cursor_move_to_word_end();
                     return true;
                 }
                 _ => {}
@@ -276,29 +272,26 @@ impl KeyboardController {
                 true
             }
             KeyCode::ArrowUp => {
-                let buf = editor.buffer().clone();
                 if shift {
-                    editor.cursor_mut().extend_selection_up(&buf);
+                    editor.cursor_extend_selection_up();
                 } else {
-                    editor.cursor_mut().move_up(&buf);
+                    editor.cursor_move_up();
                 }
                 true
             }
             KeyCode::ArrowDown => {
-                let buf = editor.buffer().clone();
                 if shift {
-                    editor.cursor_mut().extend_selection_down(&buf);
+                    editor.cursor_extend_selection_down();
                 } else {
-                    editor.cursor_mut().move_down(&buf);
+                    editor.cursor_move_down();
                 }
                 true
             }
             KeyCode::Home => {
-                let buf = editor.buffer().clone();
                 if ctrl {
                     editor.cursor_mut().set_position(0);
                 } else {
-                    editor.cursor_mut().move_to_line_start(&buf);
+                    editor.cursor_move_to_line_start();
                 }
                 if !shift {
                     editor.cursor_mut().clear_selection();
@@ -306,11 +299,11 @@ impl KeyboardController {
                 true
             }
             KeyCode::End => {
-                let buf = editor.buffer().clone();
                 if ctrl {
-                    editor.cursor_mut().set_position(buf.len_chars());
+                    let len = editor.buffer().len_chars();
+                    editor.cursor_mut().set_position(len);
                 } else {
-                    editor.cursor_mut().move_to_line_end(&buf);
+                    editor.cursor_move_to_line_end();
                 }
                 if !shift {
                     editor.cursor_mut().clear_selection();
@@ -346,9 +339,8 @@ impl KeyboardController {
                 true
             }
             KeyCode::PageUp => {
-                let buf = editor.buffer().clone();
                 for _ in 0..10 {
-                    editor.cursor_mut().move_up(&buf);
+                    editor.cursor_move_up();
                 }
                 if !shift {
                     editor.cursor_mut().clear_selection();
@@ -356,9 +348,8 @@ impl KeyboardController {
                 true
             }
             KeyCode::PageDown => {
-                let buf = editor.buffer().clone();
                 for _ in 0..10 {
-                    editor.cursor_mut().move_down(&buf);
+                    editor.cursor_move_down();
                 }
                 if !shift {
                     editor.cursor_mut().clear_selection();

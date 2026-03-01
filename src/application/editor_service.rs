@@ -563,3 +563,83 @@ fn find_prev_range(buffer: &Buffer, query: &str, from: usize) -> Option<(usize, 
 
     None
 }
+
+// ============================================================================
+// Cursor movement helper methods
+// ============================================================================
+// These methods provide cursor operations with internal buffer access,
+// avoiding borrow conflicts when the caller needs both buffer and cursor access.
+
+impl EditorService {
+    /// Move cursor up one line
+    #[inline]
+    pub fn cursor_move_up(&mut self) {
+        self.cursor.move_up(&self.buffer);
+    }
+
+    /// Move cursor down one line
+    #[inline]
+    pub fn cursor_move_down(&mut self) {
+        self.cursor.move_down(&self.buffer);
+    }
+
+    /// Move cursor to start of current line
+    #[inline]
+    pub fn cursor_move_to_line_start(&mut self) {
+        self.cursor.move_to_line_start(&self.buffer);
+    }
+
+    /// Move cursor to end of current line
+    #[inline]
+    pub fn cursor_move_to_line_end(&mut self) {
+        self.cursor.move_to_line_end(&self.buffer);
+    }
+
+    /// Move cursor to start of previous word
+    #[inline]
+    pub fn cursor_move_to_word_start(&mut self) {
+        self.cursor.move_to_word_start(&self.buffer);
+    }
+
+    /// Move cursor to end of next word
+    #[inline]
+    pub fn cursor_move_to_word_end(&mut self) {
+        self.cursor.move_to_word_end(&self.buffer);
+    }
+
+    /// Extend selection up one line
+    #[inline]
+    pub fn cursor_extend_selection_up(&mut self) {
+        self.cursor.extend_selection_up(&self.buffer);
+    }
+
+    /// Extend selection down one line
+    #[inline]
+    pub fn cursor_extend_selection_down(&mut self) {
+        self.cursor.extend_selection_down(&self.buffer);
+    }
+
+    /// Extend selection to start of previous word
+    #[inline]
+    pub fn cursor_extend_selection_to_word_start(&mut self) {
+        self.cursor.extend_selection_to_word_start(&self.buffer);
+    }
+
+    /// Extend selection to end of next word
+    #[inline]
+    pub fn cursor_extend_selection_to_word_end(&mut self) {
+        self.cursor.extend_selection_to_word_end(&self.buffer);
+    }
+
+    /// Select word at current cursor position
+    #[inline]
+    pub fn cursor_select_word(&mut self) {
+        self.cursor.select_word_at_cursor(&self.buffer);
+    }
+
+    /// Select entire current line
+    #[inline]
+    pub fn cursor_select_line(&mut self) {
+        self.cursor.select_line(&self.buffer);
+    }
+}

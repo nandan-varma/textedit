@@ -112,6 +112,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[inline]
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {
             x,
@@ -121,15 +122,18 @@ impl Rect {
         }
     }
 
+    #[inline]
     pub fn right(&self) -> f32 {
         self.x + self.width
     }
 
+    #[inline]
     pub fn bottom(&self) -> f32 {
         self.y + self.height
     }
 
     /// Check if a point (x, y) is contained within this rect
+    #[inline]
     pub fn contains(&self, x: f32, y: f32) -> bool {
         x >= self.x && x <= self.right() && y >= self.y && y <= self.bottom()
     }
@@ -295,7 +299,7 @@ impl EditorLayout {
         x: f32,
         y: f32,
         buffer: &crate::domain::Buffer,
-        glyph_atlas: &mut GlyphAtlas,
+        glyph_atlas: &GlyphAtlas,
         scroll_offset: usize,
     ) -> Option<(usize, usize)> {
         // reject if outside
@@ -314,7 +318,7 @@ impl EditorLayout {
 
         let visual_line_on_screen = (rel_y / self.line_height).floor() as usize;
         let wrapped_text =
-            super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, self);
+            super::text_geometry::WrappedText::wrap_buffer_cached(buffer, glyph_atlas, self);
         let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
         let visual_line = first_visual + visual_line_on_screen;
         let clamped_visual = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
@@ -351,7 +355,7 @@ impl EditorLayout {
                         break;
                     }
                     let ch = line_chars[char_idx];
-                    let advance = glyph_atlas.char_advance_width(ch);
+                    let advance = glyph_atlas.char_advance_width_cached(ch);
                     let center = x_offset + advance / 2.0;
                     if rel_x < center {
                         return Some((wrapped.logical_line, char_idx));

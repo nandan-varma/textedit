@@ -43,6 +43,27 @@ impl WrappedText {
         glyph_atlas: &mut GlyphAtlas,
         layout: &EditorLayout,
     ) -> Self {
+        Self::wrap_buffer_impl(buffer, layout, |ch| glyph_atlas.char_advance_width(ch))
+    }
+
+    /// Wrap buffer using only cached glyph metrics.
+    /// This avoids mutating the atlas, making it suitable for hit testing.
+    /// Characters not in cache use a fallback width estimate.
+    pub fn wrap_buffer_cached(
+        buffer: &Buffer,
+        glyph_atlas: &GlyphAtlas,
+        layout: &EditorLayout,
+    ) -> Self {
+        Self::wrap_buffer_impl(buffer, layout, |ch| {
+            glyph_atlas.char_advance_width_cached(ch)
+        })
+    }
+
+    /// Internal implementation that accepts a function to get character widths
+    fn wrap_buffer_impl<F>(buffer: &Buffer, layout: &EditorLayout, mut char_width_fn: F) -> Self
+    where
+        F: FnMut(char) -> f32,
+    {
         let mut wrapped_text = WrappedText::new();
 
         let text_area_width =
@@ -74,7 +95,7 @@ impl WrappedText {
                 // Find how many characters fit on this visual line
                 while end_char < total_chars {
                     let ch = line_chars[end_char];
-                    let advance = glyph_atlas.char_advance_width(ch);
+                    let advance = char_width_fn(ch);
 
                     if x_offset + advance > text_area_width && end_char > start_char {
                         break;

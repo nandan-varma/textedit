@@ -7,10 +7,12 @@ pub struct Selection {
 }
 
 impl Selection {
+    #[inline]
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
 
+    #[inline]
     pub fn range(&self) -> (usize, usize) {
         if self.start <= self.end {
             (self.start, self.end)
@@ -19,11 +21,13 @@ impl Selection {
         }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         let (s, e) = self.range();
         s == e
     }
 
+    #[inline]
     #[allow(dead_code)]
     pub fn len(&self) -> usize {
         let (s, e) = self.range();
@@ -38,6 +42,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
+    #[inline]
     pub fn new() -> Self {
         Self {
             position: 0,
@@ -46,16 +51,19 @@ impl Cursor {
         }
     }
 
+    #[inline]
     pub fn position(&self) -> usize {
         self.position
     }
 
+    #[inline]
     pub fn set_position(&mut self, pos: usize) {
         self.position = pos;
         self.selection = None;
         self.preferred_col = None;
     }
 
+    #[inline]
     pub fn selection(&self) -> Option<Selection> {
         self.selection
     }
@@ -134,23 +142,21 @@ impl Cursor {
     }
 
     pub fn move_to_word_start(&mut self, buffer: &Buffer) {
-        let text = buffer.as_str();
-        let pos = self.position;
-        let mut new_pos = pos;
-        let chars: Vec<char> = text.chars().collect();
+        let len = buffer.len_chars();
+        let mut new_pos = self.position;
+        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
         if new_pos > 0 {
-            let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
-
-            if new_pos < chars.len() && is_word_char(chars[new_pos]) {
-                while new_pos > 0 && is_word_char(chars[new_pos - 1]) {
+            if buffer.char_matches(new_pos, is_word_char) {
+                while new_pos > 0 && buffer.char_matches(new_pos - 1, is_word_char) {
                     new_pos -= 1;
                 }
             } else {
-                while new_pos < chars.len() && !is_word_char(chars[new_pos]) {
+                while new_pos < len && !buffer.char_matches(new_pos, is_word_char) {
                     new_pos += 1;
                 }
-                while new_pos > 0 && new_pos < chars.len() && is_word_char(chars[new_pos - 1]) {
+                while new_pos > 0 && new_pos < len && buffer.char_matches(new_pos - 1, is_word_char)
+                {
                     new_pos -= 1;
                 }
             }
@@ -162,18 +168,14 @@ impl Cursor {
     }
 
     pub fn move_to_word_end(&mut self, buffer: &Buffer) {
-        let text = buffer.as_str();
-        let pos = self.position;
-        let mut new_pos = pos;
-        let chars: Vec<char> = text.chars().collect();
-        let len = chars.len();
-
+        let len = buffer.len_chars();
+        let mut new_pos = self.position;
         let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
-        while new_pos < len && is_word_char(chars[new_pos]) {
+        while new_pos < len && buffer.char_matches(new_pos, is_word_char) {
             new_pos += 1;
         }
-        while new_pos < len && !is_word_char(chars[new_pos]) {
+        while new_pos < len && !buffer.char_matches(new_pos, is_word_char) {
             new_pos += 1;
         }
 
@@ -183,23 +185,21 @@ impl Cursor {
     }
 
     pub fn extend_selection_to_word_start(&mut self, buffer: &Buffer) {
-        let text = buffer.as_str();
-        let pos = self.position;
-        let mut new_pos = pos;
-        let chars: Vec<char> = text.chars().collect();
-
+        let len = buffer.len_chars();
+        let mut new_pos = self.position;
         let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
         if new_pos > 0 {
-            if new_pos < chars.len() && is_word_char(chars[new_pos]) {
-                while new_pos > 0 && is_word_char(chars[new_pos - 1]) {
+            if buffer.char_matches(new_pos, is_word_char) {
+                while new_pos > 0 && buffer.char_matches(new_pos - 1, is_word_char) {
                     new_pos -= 1;
                 }
             } else {
-                while new_pos < chars.len() && !is_word_char(chars[new_pos]) {
+                while new_pos < len && !buffer.char_matches(new_pos, is_word_char) {
                     new_pos += 1;
                 }
-                while new_pos > 0 && new_pos < chars.len() && is_word_char(chars[new_pos - 1]) {
+                while new_pos > 0 && new_pos < len && buffer.char_matches(new_pos - 1, is_word_char)
+                {
                     new_pos -= 1;
                 }
             }
@@ -209,18 +209,14 @@ impl Cursor {
     }
 
     pub fn extend_selection_to_word_end(&mut self, buffer: &Buffer) {
-        let text = buffer.as_str();
-        let pos = self.position;
-        let mut new_pos = pos;
-        let chars: Vec<char> = text.chars().collect();
-        let len = chars.len();
-
+        let len = buffer.len_chars();
+        let mut new_pos = self.position;
         let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
-        while new_pos < len && is_word_char(chars[new_pos]) {
+        while new_pos < len && buffer.char_matches(new_pos, is_word_char) {
             new_pos += 1;
         }
-        while new_pos < len && !is_word_char(chars[new_pos]) {
+        while new_pos < len && !buffer.char_matches(new_pos, is_word_char) {
             new_pos += 1;
         }
 
@@ -242,20 +238,18 @@ impl Cursor {
     }
 
     pub fn select_word_at_cursor(&mut self, buffer: &Buffer) {
-        let text = buffer.as_str();
+        let len = buffer.len_chars();
         let pos = self.position;
-        let chars: Vec<char> = text.chars().collect();
-
         let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
 
         let mut start = pos;
         let mut end = pos;
 
-        while start > 0 && is_word_char(chars[start - 1]) {
+        while start > 0 && buffer.char_matches(start - 1, is_word_char) {
             start -= 1;
         }
 
-        while end < chars.len() && is_word_char(chars[end]) {
+        while end < len && buffer.char_matches(end, is_word_char) {
             end += 1;
         }
 

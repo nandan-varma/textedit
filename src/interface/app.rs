@@ -805,12 +805,10 @@ impl ApplicationHandler<MenuAction> for App {
 
                                 match click_count {
                                     2 => {
-                                        let buffer = editor.buffer().clone();
-                                        editor.cursor_mut().select_word_at_cursor(&buffer);
+                                        editor.cursor_select_word();
                                     }
                                     3 => {
-                                        let buffer = editor.buffer().clone();
-                                        editor.cursor_mut().select_line(&buffer);
+                                        editor.cursor_select_line();
                                     }
                                     _ => {
                                         editor.cursor_mut().set_position(char_idx);
@@ -827,6 +825,8 @@ impl ApplicationHandler<MenuAction> for App {
                                 ) {
                                     eprintln!("Failed to update geometry: {}", e);
                                 }
+                                // Request redraw after mouse click (required for Wait mode)
+                                state.window().request_redraw();
                             }
                         }
                         MouseButtonState::Pressed
@@ -870,6 +870,8 @@ impl ApplicationHandler<MenuAction> for App {
                         ) {
                             eprintln!("Failed to update geometry after scroll: {}", e);
                         }
+                        // Request redraw after scroll (required for Wait mode)
+                        state.window().request_redraw();
                     }
                 }
                 // Update modal geometry (including match highlights) after scroll
@@ -906,6 +908,8 @@ impl ApplicationHandler<MenuAction> for App {
                         ) {
                             eprintln!("Failed to update geometry: {}", e);
                         }
+                        // Request redraw after cursor drag (required for Wait mode)
+                        state.window().request_redraw();
                     }
                 }
             }
@@ -1071,6 +1075,9 @@ impl ApplicationHandler<MenuAction> for App {
                     ) {
                         eprintln!("Failed to update geometry: {}", e);
                     }
+
+                    // Request redraw after keyboard input (required for Wait mode)
+                    state.window().request_redraw();
                 }
             }
             _ => {}
@@ -1084,8 +1091,11 @@ impl ApplicationHandler<MenuAction> for App {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.poll_menu_events();
 
+        // Use Wait instead of Poll to avoid burning CPU when idle.
+        // The window will be redrawn when events occur or when
+        // window.request_redraw() is called after state changes.
         if self.state.is_some() {
-            event_loop.set_control_flow(ControlFlow::Poll);
+            event_loop.set_control_flow(ControlFlow::Wait);
         }
     }
 }
