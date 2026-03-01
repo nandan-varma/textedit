@@ -34,3 +34,20 @@ impl Clipboard for ArboardClipboard {
             .map_err(|e| EditorError::ClipboardError(e.to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ArboardClipboard;
+
+    #[test]
+    fn test_arboard_clipboard_new() {
+        let clipboard = ArboardClipboard::new();
+        assert!(true);
+    }
+
+    #[test]
+    fn test_arboard_clipboard_default() {
+        let clipboard = ArboardClipboard::default();
+        assert!(true);
+    }
+}

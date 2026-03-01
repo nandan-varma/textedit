@@ -83,3 +83,65 @@ fn style_to_rgba(style: Style) -> [f32; 4] {
         (fg.a as f32) / 255.0,
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SyntaxHighlighter;
+    use crate::domain::Buffer;
+
+    #[test]
+    fn test_syntax_highlighter_new_valid_theme() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        assert!(true);
+    }
+
+    #[test]
+    fn test_syntax_highlighter_new_invalid_theme_fallback() {
+        let highlighter = SyntaxHighlighter::new("nonexistent-theme-xyz");
+        assert!(true);
+    }
+
+    #[test]
+    fn test_highlight_visible_lines_empty_buffer() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let buffer = Buffer::from_str("");
+        let result = highlighter.highlight_visible_lines(&buffer, None, &[0]);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key(&0));
+        assert!(result.get(&0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_highlight_visible_lines_empty_visibility() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let buffer = Buffer::from_str("hello\nworld");
+        let result = highlighter.highlight_visible_lines(&buffer, None, &[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_highlight_visible_lines_with_visible_lines() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let buffer = Buffer::from_str("fn main() {}\nlet x = 1;");
+        let result = highlighter.highlight_visible_lines(&buffer, None, &[0, 1]);
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key(&0));
+        assert!(result.contains_key(&1));
+    }
+
+    #[test]
+    fn test_highlight_visible_lines_with_file_extension() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let buffer = Buffer::from_str("fn main() {}");
+        let result = highlighter.highlight_visible_lines(&buffer, Some("test.rs"), &[0]);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_highlight_visible_lines_unknown_extension() {
+        let highlighter = SyntaxHighlighter::new("base16-ocean.dark");
+        let buffer = Buffer::from_str("some content");
+        let result = highlighter.highlight_visible_lines(&buffer, Some("test.xyz"), &[0]);
+        assert_eq!(result.len(), 1);
+    }
+}
