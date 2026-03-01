@@ -1,31 +1,36 @@
-use crate::menu::MenuAction;
-mod app;
+mod application;
 mod config;
-mod editor;
-mod file;
+mod domain;
+mod error;
+mod infrastructure;
+mod interface;
 mod menu;
+mod ports;
 mod renderer;
 mod state;
 mod syntax;
 pub mod themes;
 
-use app::App;
+use interface::App;
 use menu::MenuHandler;
 use winit::event_loop::EventLoop;
 
 fn main() {
     env_logger::init();
 
-    let event_loop = EventLoop::<MenuAction>::with_user_event().build().unwrap();
+    let event_loop = match EventLoop::<menu::MenuAction>::with_user_event().build() {
+        Ok(el) => el,
+        Err(e) => {
+            eprintln!("Failed to create event loop: {}", e);
+            std::process::exit(1);
+        }
+    };
 
-    // Create proxy for menu events
     let proxy = event_loop.create_proxy();
 
-    // Create and initialize menu handler
     let mut menu_handler = MenuHandler::new();
     menu_handler.build();
 
-    // Initialize menu system
     menu_handler.init(proxy);
 
     let mut app = App::new().with_menu(menu_handler);

@@ -4,7 +4,6 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Style, Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-
 pub struct SyntaxHighlighter {
     ss: SyntaxSet,
     theme: Theme,
@@ -24,7 +23,7 @@ impl SyntaxHighlighter {
 
     pub fn highlight_visible_lines(
         &self,
-        buffer: &crate::editor::Buffer,
+        buffer: &crate::domain::Buffer,
         file_path: Option<&str>,
         visible_logical_lines: &[usize],
     ) -> HashMap<usize, Vec<[f32; 4]>> {
@@ -84,4 +83,3 @@ fn style_to_rgba(style: Style) -> [f32; 4] {
         (fg.a as f32) / 255.0,
     ]
 }
-

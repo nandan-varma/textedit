@@ -226,7 +226,7 @@ impl EditorLayout {
         &self,
         x: f32,
         y: f32,
-        buffer: &crate::editor::Buffer,
+        buffer: &crate::domain::Buffer,
         glyph_atlas: &mut GlyphAtlas,
         scroll_offset: usize,
     ) -> Option<(usize, usize)> {
@@ -247,8 +247,7 @@ impl EditorLayout {
         let visual_line_on_screen = (rel_y / self.line_height).floor() as usize;
         let wrapped_text =
             super::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, self);
-        let first_visual =
-            scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
+        let first_visual = scroll_offset.min(wrapped_text.total_visual_lines.saturating_sub(1));
         let visual_line = first_visual + visual_line_on_screen;
         let clamped_visual = visual_line.min(wrapped_text.wrapped_lines.len().saturating_sub(1));
 

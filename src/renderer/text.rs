@@ -1,6 +1,5 @@
 use crate::config::EditorConfig;
-use crate::editor::Buffer;
-
+use crate::domain::Buffer;
 
 pub struct TextRenderer {
     config: EditorConfig,
@@ -11,19 +10,26 @@ impl TextRenderer {
         Self { config }
     }
 
-
     pub fn render_text(&self, buffer: &Buffer, line_idx: usize) -> Option<String> {
         buffer.line(line_idx)
     }
 
     /// Render a line with per-character colors (for syntax highlighting)
-    pub fn render_text_colored(&self, buffer: &Buffer, line_idx: usize, colors: Option<&[[f32; 4]]>) -> Option<Vec<(char, [f32; 4])>> {
+    pub fn render_text_colored(
+        &self,
+        buffer: &Buffer,
+        line_idx: usize,
+        colors: Option<&[[f32; 4]]>,
+    ) -> Option<Vec<(char, [f32; 4])>> {
         let line = buffer.line(line_idx)?;
         let chars: Vec<char> = line.chars().collect();
         let mut out = Vec::with_capacity(chars.len());
         if let Some(colors) = colors {
             for (i, ch) in chars.iter().enumerate() {
-                let color = colors.get(i).copied().unwrap_or(self.config.colors().text_color);
+                let color = colors
+                    .get(i)
+                    .copied()
+                    .unwrap_or(self.config.colors().text_color);
                 out.push((*ch, color));
             }
         } else {

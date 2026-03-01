@@ -28,6 +28,9 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 
+# Error handling
+thiserror = "1.0"
+
 # Logging
 log = "0.4"
 env_logger = "0.10"

@@ -2,14 +2,8 @@ use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
 pub enum Operation {
-    Insert {
-        position: usize,
-        text: String,
-    },
-    Delete {
-        position: usize,
-        text: String, // Store deleted text for undo
-    },
+    Insert { position: usize, text: String },
+    Delete { position: usize, text: String },
 }
 
 pub struct OperationHistory {
@@ -27,7 +21,7 @@ impl OperationHistory {
 
     pub fn push(&mut self, operation: Operation) {
         self.undo_stack.push_back(operation);
-        self.redo_stack.clear(); // Clear redo stack on new operation
+        self.redo_stack.clear();
     }
 
     pub fn undo(&mut self) -> Option<Operation> {
@@ -79,5 +73,11 @@ impl OperationHistory {
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
+    }
+}
+
+impl Default for OperationHistory {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,11 +1,10 @@
+use crate::application::EditorService;
+use crate::domain::operations::Operation;
+use crate::error::Result;
+use crate::infrastructure::clipboard::ArboardClipboard;
+use crate::ports::Clipboard;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
-
-use crate::app::clipboard::{
-    copy_selection as app_copy, cut_selection as app_cut, paste_at_cursor as app_paste,
-};
-use crate::editor::operations::Operation;
-use crate::editor::Editor;
 
 pub struct KeyboardController {
     modifiers: ModifiersState,
@@ -22,7 +21,7 @@ impl KeyboardController {
         self.modifiers = modifiers;
     }
 
-    pub fn handle_key_event(&mut self, editor: &mut Editor, event: KeyEvent) -> bool {
+    pub fn handle_key_event(&mut self, editor: &mut EditorService, event: KeyEvent) -> bool {
         if event.state != ElementState::Pressed {
             return false;
         }
@@ -31,22 +30,14 @@ impl KeyboardController {
             return false;
         };
 
-        // Command bar (Find/Replace) captures input while active.
-        if editor.is_command_bar_active() {
-            return self.handle_command_bar_input(editor, code, event.text.as_deref());
-        }
-
-        // Handle Ctrl/Cmd shortcuts first
         if self.modifiers.control_key() || self.modifiers.super_key() {
             return self.handle_shortcut(editor, code);
         }
 
-        // Handle special keys that might have conflicting text
         if Self::is_special_key(code) {
             return self.handle_special_key(editor, code);
         }
 
-        // Handle text input for printable characters
         if let Some(text) = event.text {
             let is_printable = !text.chars().any(|c| c.is_control());
             if is_printable && !text.is_empty() {
@@ -78,45 +69,88 @@ impl KeyboardController {
         )
     }
 
-    fn handle_shortcut(&mut self, editor: &mut Editor, code: KeyCode) -> bool {
+    fn handle_shortcut(&mut self, editor: &mut EditorService, code: KeyCode) -> bool {
+        let clipboard = ArboardClipboard::new();
+
         match code {
             KeyCode::KeyZ => {
                 if let Some(op) = editor.history_mut().undo() {
-                    apply_operation_reverse(editor, op);
+                    apply_undo(editor, op);
                 }
                 true
             }
             KeyCode::KeyY => {
                 if let Some(op) = editor.history_mut().redo() {
-                    apply_operation(editor, op);
+                    apply_redo(editor, op);
                 }
                 true
             }
-            KeyCode::KeyS => {
-                if let Some(path) = editor.file_path() {
-                    let content = editor.buffer().as_str();
-                    if let Err(e) = crate::file::save_file(path, &content) {
-                        eprintln!("Failed to save: {}", e);
-                    } else {
-                        editor.set_modified(false);
-                    }
-                }
-                true
-            }
+            KeyCode::KeyS => true,
             KeyCode::KeyC => {
                 if let Some(sel) = editor.cursor().selection() {
-                    app_copy(editor, sel);
+                    if !sel.is_empty() {
+                        let (s, e) = sel.range();
+                        let text = editor
+                            .buffer()
+                            .as_str()
+                            .chars()
+                            .skip(s)
+                            .take(e - s)
+                            .collect::<String>();
+                        let _ = clipboard.set_text(&text);
+                    }
                 }
                 true
             }
             KeyCode::KeyX => {
                 if let Some(sel) = editor.cursor().selection() {
-                    app_cut(editor, sel);
+                    if !sel.is_empty() {
+                        let (s, e) = sel.range();
+                        let text = editor
+                            .buffer()
+                            .as_str()
+                            .chars()
+                            .skip(s)
+                            .take(e - s)
+                            .collect::<String>();
+                        let _ = clipboard.set_text(&text);
+                        editor.buffer_mut().remove(s, e - s);
+                        editor
+                            .history_mut()
+                            .push(Operation::Delete { position: s, text });
+                        editor.cursor_mut().set_position(s);
+                    }
                 }
                 true
             }
             KeyCode::KeyV => {
-                app_paste(editor);
+                if let Ok(text) = clipboard.get_text() {
+                    if let Some(sel) = editor.cursor().selection() {
+                        if !sel.is_empty() {
+                            let (s, e) = sel.range();
+                            let txt = editor
+                                .buffer()
+                                .as_str()
+                                .chars()
+                                .skip(s)
+                                .take(e - s)
+                                .collect::<String>();
+                            editor.buffer_mut().remove(s, e - s);
+                            editor.history_mut().push(Operation::Delete {
+                                position: s,
+                                text: txt,
+                            });
+                            editor.cursor_mut().set_position(s);
+                        }
+                    }
+                    let pos = editor.cursor().position();
+                    editor.buffer_mut().insert(pos, &text);
+                    editor.cursor_mut().set_position(pos + text.len());
+                    editor.history_mut().push(Operation::Insert {
+                        position: pos,
+                        text,
+                    });
+                }
                 true
             }
             KeyCode::KeyA => {
@@ -128,77 +162,26 @@ impl KeyboardController {
                 true
             }
             KeyCode::KeyF => {
-                editor.begin_find();
+                editor.set_find_query(Some(String::new()));
                 true
             }
             KeyCode::KeyH => {
-                editor.begin_replace();
+                editor.set_find_query(Some(String::new()));
                 true
             }
             KeyCode::KeyG => {
                 if self.modifiers.shift_key() {
-                    editor.find_prev()
+                    editor.find_prev();
                 } else {
-                    editor.find_next()
+                    editor.find_next();
                 }
+                true
             }
             _ => false,
         }
     }
 
-    fn handle_command_bar_input(
-        &mut self,
-        editor: &mut Editor,
-        code: KeyCode,
-        text: Option<&str>,
-    ) -> bool {
-        match code {
-            KeyCode::Escape => {
-                editor.cancel_command_bar();
-                true
-            }
-            KeyCode::Enter => {
-                // Find applies in Find mode; Replace applies in Replace mode.
-                if let Some(cb) = editor.command_bar() {
-                    match cb.mode {
-                        crate::editor::CommandBarMode::Find => {
-                            editor.find_next();
-                        }
-                        crate::editor::CommandBarMode::Replace => {
-                            editor.replace_next();
-                        }
-                    }
-                }
-                true
-            }
-            KeyCode::Backspace => {
-                if let Some(cb) = editor.command_bar_mut() {
-                    cb.backspace();
-                }
-                true
-            }
-            KeyCode::Tab => {
-                if let Some(cb) = editor.command_bar_mut() {
-                    cb.toggle_field();
-                }
-                true
-            }
-            _ => {
-                if let Some(t) = text {
-                    let is_printable = !t.chars().any(|c| c.is_control());
-                    if is_printable && !t.is_empty() {
-                        if let Some(cb) = editor.command_bar_mut() {
-                            cb.push_text(t);
-                        }
-                        return true;
-                    }
-                }
-                true
-            }
-        }
-    }
-
-    fn handle_text_input(&mut self, editor: &mut Editor, text: &str) -> bool {
+    fn handle_text_input(&mut self, editor: &mut EditorService, text: &str) -> bool {
         if let Some(sel) = editor.cursor().selection() {
             if !sel.is_empty() {
                 let (s, e) = sel.range();
@@ -230,11 +213,10 @@ impl KeyboardController {
         true
     }
 
-    fn handle_special_key(&mut self, editor: &mut Editor, code: KeyCode) -> bool {
+    fn handle_special_key(&mut self, editor: &mut EditorService, code: KeyCode) -> bool {
         let ctrl = self.modifiers.control_key();
         let shift = self.modifiers.shift_key();
 
-        // Ctrl+Shift+Arrow for word selection
         if ctrl && shift {
             match code {
                 KeyCode::ArrowLeft => {
@@ -260,7 +242,6 @@ impl KeyboardController {
             }
         }
 
-        // Ctrl+Arrow for word navigation
         if ctrl && !shift {
             match code {
                 KeyCode::ArrowLeft => {
@@ -389,7 +370,7 @@ impl KeyboardController {
         }
     }
 
-    fn handle_backspace(&self, editor: &mut Editor) {
+    fn handle_backspace(&self, editor: &mut EditorService) {
         if let Some(sel) = editor.cursor().selection() {
             if !sel.is_empty() {
                 let (s, e) = sel.range();
@@ -423,7 +404,7 @@ impl KeyboardController {
         }
     }
 
-    fn handle_delete(&self, editor: &mut Editor) {
+    fn handle_delete(&self, editor: &mut EditorService) {
         if let Some(sel) = editor.cursor().selection() {
             if !sel.is_empty() {
                 let (s, e) = sel.range();
@@ -457,7 +438,7 @@ impl KeyboardController {
         }
     }
 
-    fn handle_unindent(&self, editor: &mut Editor) {
+    fn handle_unindent(&self, editor: &mut EditorService) {
         let buf = editor.buffer();
         let (line, _) = buf.char_to_line_col(editor.cursor().position());
 
@@ -489,28 +470,28 @@ impl Default for KeyboardController {
     }
 }
 
-fn apply_operation(editor: &mut Editor, op: Operation) {
+fn apply_undo(editor: &mut EditorService, op: Operation) {
     match op {
         Operation::Insert { position, text } => {
-            editor.buffer_mut().insert(position, &text);
-            editor.cursor_mut().set_position(position + text.len());
-        }
-        Operation::Delete { position, text } => {
             editor.buffer_mut().remove(position, text.len());
             editor.cursor_mut().set_position(position);
+        }
+        Operation::Delete { position, text } => {
+            editor.buffer_mut().insert(position, &text);
+            editor.cursor_mut().set_position(position + text.len());
         }
     }
 }
 
-fn apply_operation_reverse(editor: &mut Editor, op: Operation) {
+fn apply_redo(editor: &mut EditorService, op: Operation) {
     match op {
         Operation::Insert { position, text } => {
-            editor.buffer_mut().remove(position, text.len());
-            editor.cursor_mut().set_position(position);
-        }
-        Operation::Delete { position, text } => {
             editor.buffer_mut().insert(position, &text);
             editor.cursor_mut().set_position(position + text.len());
+        }
+        Operation::Delete { position, text } => {
+            editor.buffer_mut().remove(position, text.len());
+            editor.cursor_mut().set_position(position);
         }
     }
 }

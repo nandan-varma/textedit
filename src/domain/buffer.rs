@@ -45,7 +45,6 @@ impl Buffer {
         self.content.get_line(line_idx).map(|l| l.to_string())
     }
 
-    /// Borrow the underlying rope for efficient iteration.
     pub fn rope(&self) -> &Rope {
         &self.content
     }
@@ -83,17 +82,12 @@ impl Buffer {
         None
     }
 
-    /// Get the character index for the start of a line
     pub fn line_to_char(&self, line: usize) -> usize {
         self.content.line_to_char(line)
     }
 
     pub fn as_str(&self) -> String {
         self.content.to_string()
-    }
-
-    pub fn lines(&self) -> Vec<String> {
-        self.content.lines().map(|l| l.to_string()).collect()
     }
 
     pub fn clear(&mut self) {
@@ -110,5 +104,11 @@ impl Clone for Buffer {
         Self {
             content: self.content.clone(),
         }
+    }
+}
+
+impl Default for Buffer {
+    fn default() -> Self {
+        Self::new()
     }
 }

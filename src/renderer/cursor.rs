@@ -1,6 +1,6 @@
 use super::glyph_cache::GlyphAtlas;
 use super::layout::EditorLayout;
-use crate::editor::{Buffer, Cursor};
+use crate::domain::{Buffer, Cursor};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]

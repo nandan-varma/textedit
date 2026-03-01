@@ -4,8 +4,8 @@ use wgpu::util::DeviceExt;
 impl State {
     pub fn update_geometry(
         &mut self,
-        buffer: &crate::editor::Buffer,
-        cursor: &crate::editor::Cursor,
+        buffer: &crate::domain::Buffer,
+        cursor: &crate::domain::Cursor,
         show_line_numbers: bool,
         show_status_bar: bool,
         status_bar_override: Option<&str>,

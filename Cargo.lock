@@ -3115,6 +3115,7 @@ dependencies = [
  "ropey",
  "serde",
  "syntect",
+ "thiserror 1.0.69",
  "toml",
  "unicode-segmentation",
  "wgpu",

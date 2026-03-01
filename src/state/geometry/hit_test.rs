@@ -9,7 +9,7 @@ impl State {
         &self,
         x: f64,
         y: f64,
-        buffer: &crate::editor::Buffer,
+        buffer: &crate::domain::Buffer,
         show_line_numbers: bool,
         show_status_bar: bool,
     ) -> Option<(usize, usize)> {

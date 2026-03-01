@@ -1,7 +1,7 @@
 use super::glyph_cache::GlyphAtlas;
 use super::layout::EditorLayout;
 use super::text_geometry::TextVertex;
-use crate::editor::{Buffer, Cursor};
+use crate::domain::{Buffer, Cursor};
 
 pub struct StatusBarGeometry {
     pub vertices: Vec<TextVertex>,
@@ -35,7 +35,12 @@ impl StatusBarGeometry {
         let status_text = if let Some(t) = override_text {
             t.to_string()
         } else {
-            format!("Ln {}, Col {}  |  UTF-8  |  {} lines", line + 1, col + 1, total_lines)
+            format!(
+                "Ln {}, Col {}  |  UTF-8  |  {} lines",
+                line + 1,
+                col + 1,
+                total_lines
+            )
         };
 
         // Get font metrics for baseline positioning

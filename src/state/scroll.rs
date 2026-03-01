@@ -1,8 +1,14 @@
 use super::init::State;
-use crate::editor::{Buffer, Cursor};
+use crate::domain::{Buffer, Cursor};
 
 impl State {
-    pub fn scroll_by_lines(&mut self, delta_lines: i32, buffer: &Buffer, show_line_numbers: bool, show_status_bar: bool) {
+    pub fn scroll_by_lines(
+        &mut self,
+        delta_lines: i32,
+        buffer: &Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) {
         let size = self.window.inner_size();
         let layout = crate::renderer::layout::EditorLayout::new(
             size.width as f32,
@@ -14,7 +20,11 @@ impl State {
         );
 
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
-            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(
+                buffer,
+                glyph_atlas,
+                &layout,
+            );
             self.total_visual_lines = wrapped_text.total_visual_lines;
 
             let visible = layout.visible_lines().max(1);
@@ -34,7 +44,13 @@ impl State {
             self.scroll_visual_offset = next as usize;
         }
     }
-    pub fn ensure_cursor_visible(&mut self, cursor: &Cursor, buffer: &Buffer, show_line_numbers: bool, show_status_bar: bool) {
+    pub fn ensure_cursor_visible(
+        &mut self,
+        cursor: &Cursor,
+        buffer: &Buffer,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) {
         let size = self.window.inner_size();
         let layout = crate::renderer::layout::EditorLayout::new(
             size.width as f32,
@@ -46,7 +62,11 @@ impl State {
         );
 
         if let Some(glyph_atlas) = &mut self.glyph_atlas {
-            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(buffer, glyph_atlas, &layout);
+            let wrapped_text = crate::renderer::text_geometry::WrappedText::wrap_buffer(
+                buffer,
+                glyph_atlas,
+                &layout,
+            );
             self.total_visual_lines = wrapped_text.total_visual_lines;
 
             let visible = layout.visible_lines().max(1);
