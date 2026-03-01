@@ -112,3 +112,87 @@ impl Default for Buffer {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Buffer;
+
+    #[test]
+    fn test_buffer_new_is_empty() {
+        let buffer = Buffer::new();
+        assert_eq!(buffer.len_chars(), 0);
+    }
+
+    #[test]
+    fn test_buffer_from_str() {
+        let buffer = Buffer::from_str("hello");
+        assert_eq!(buffer.len_chars(), 5);
+        assert_eq!(buffer.as_str(), "hello");
+    }
+
+    #[test]
+    fn test_buffer_insert() {
+        let mut buffer = Buffer::from_str("hello");
+        buffer.insert(2, "X");
+        assert_eq!(buffer.as_str(), "heXllo");
+    }
+
+    #[test]
+    fn test_buffer_remove() {
+        let mut buffer = Buffer::from_str("hello");
+        buffer.remove(0, 2);
+        assert_eq!(buffer.as_str(), "llo");
+    }
+
+    #[test]
+    fn test_buffer_get_char() {
+        let buffer = Buffer::from_str("hello");
+        assert_eq!(buffer.get_char(0), Some('h'));
+        assert_eq!(buffer.get_char(4), Some('o'));
+    }
+
+    #[test]
+    fn test_buffer_len() {
+        let buffer = Buffer::from_str("hello");
+        assert_eq!(buffer.len_chars(), 5);
+    }
+
+    #[test]
+    fn test_buffer_len_lines() {
+        let buffer = Buffer::from_str("line1\nline2");
+        assert_eq!(buffer.len_lines(), 2);
+    }
+
+    #[test]
+    fn test_buffer_as_str() {
+        let buffer = Buffer::from_str("hello world");
+        assert_eq!(buffer.as_str(), "hello world");
+    }
+
+    #[test]
+    fn test_buffer_clear() {
+        let mut buffer = Buffer::from_str("hello");
+        buffer.clear();
+        assert_eq!(buffer.len_chars(), 0);
+    }
+
+    #[test]
+    fn test_buffer_set_content() {
+        let mut buffer = Buffer::new();
+        buffer.set_content("test");
+        assert_eq!(buffer.as_str(), "test");
+    }
+
+    #[test]
+    fn test_buffer_clone() {
+        let buffer1 = Buffer::from_str("hello");
+        let buffer2 = buffer1.clone();
+        assert_eq!(buffer1.as_str(), buffer2.as_str());
+    }
+
+    #[test]
+    fn test_buffer_default() {
+        let buffer = Buffer::default();
+        assert_eq!(buffer.len_chars(), 0);
+    }
+}

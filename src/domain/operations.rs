@@ -81,3 +81,84 @@ impl Default for OperationHistory {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Operation, OperationHistory};
+
+    #[test]
+    fn test_history_new_is_empty() {
+        let history = OperationHistory::new();
+        assert!(!history.can_undo());
+        assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn test_history_push_adds_to_undo() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "test".to_string(),
+        });
+        assert!(history.can_undo());
+    }
+
+    #[test]
+    fn test_history_undo_returns_op() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "hello".to_string(),
+        });
+        let op = history.undo();
+        assert!(op.is_some());
+    }
+
+    #[test]
+    fn test_history_redo_after_undo() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "hello".to_string(),
+        });
+        history.undo();
+        assert!(history.can_redo());
+    }
+
+    #[test]
+    fn test_history_push_clears_redo() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "test".to_string(),
+        });
+        history.undo();
+        assert!(history.can_redo());
+
+        history.push(Operation::Insert {
+            position: 5,
+            text: "more".to_string(),
+        });
+        assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn test_history_clear() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "test".to_string(),
+        });
+        assert!(history.can_undo());
+        history.clear();
+        assert!(!history.can_undo());
+        assert!(!history.can_redo());
+    }
+
+    #[test]
+    fn test_history_default() {
+        let history = OperationHistory::default();
+        assert!(!history.can_undo());
+        assert!(!history.can_redo());
+    }
+}

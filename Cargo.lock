@@ -3115,6 +3115,7 @@ dependencies = [
  "ropey",
  "serde",
  "syntect",
+ "tempfile",
  "thiserror 1.0.69",
  "toml",
  "unicode-segmentation",

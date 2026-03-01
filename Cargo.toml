@@ -44,3 +44,6 @@ muda = "0.17"
 # File dialogs
 rfd = "0.15"
 syntect = "5.3.0"
+
+[dev-dependencies]
+tempfile = "3.8"

@@ -342,3 +342,154 @@ impl Default for Cursor {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Cursor, Selection};
+    use crate::domain::buffer::Buffer;
+
+    #[test]
+    fn test_selection_new() {
+        let sel = Selection::new(5, 10);
+        assert_eq!(sel.start, 5);
+        assert_eq!(sel.end, 10);
+    }
+
+    #[test]
+    fn test_selection_range() {
+        let sel = Selection::new(5, 10);
+        let (start, end) = sel.range();
+        assert_eq!(start, 5);
+        assert_eq!(end, 10);
+    }
+
+    #[test]
+    fn test_selection_range_reverse() {
+        let sel = Selection::new(10, 5);
+        let (start, end) = sel.range();
+        assert_eq!(start, 5);
+        assert_eq!(end, 10);
+    }
+
+    #[test]
+    fn test_selection_is_empty() {
+        let sel = Selection::new(5, 5);
+        assert!(sel.is_empty());
+        let sel2 = Selection::new(5, 10);
+        assert!(!sel2.is_empty());
+    }
+
+    #[test]
+    fn test_cursor_new() {
+        let cursor = Cursor::new();
+        assert_eq!(cursor.position(), 0);
+        assert!(cursor.selection().is_none());
+    }
+
+    #[test]
+    fn test_cursor_set_position() {
+        let mut cursor = Cursor::new();
+        cursor.set_position(10);
+        assert_eq!(cursor.position(), 10);
+    }
+
+    #[test]
+    fn test_cursor_extend_selection() {
+        let mut cursor = Cursor::new();
+        cursor.set_position(5);
+        cursor.extend_selection(10);
+        assert_eq!(cursor.position(), 10);
+        assert!(cursor.selection().is_some());
+    }
+
+    #[test]
+    fn test_cursor_clear_selection() {
+        let mut cursor = Cursor::new();
+        cursor.set_selection_start(5);
+        cursor.set_selection_end(10);
+        assert!(cursor.selection().is_some());
+        cursor.clear_selection();
+        assert!(cursor.selection().is_none());
+    }
+
+    #[test]
+    fn test_cursor_move_forward() {
+        let mut cursor = Cursor::new();
+        cursor.set_position(5);
+        cursor.move_forward(20);
+        assert_eq!(cursor.position(), 6);
+    }
+
+    #[test]
+    fn test_cursor_move_backward() {
+        let mut cursor = Cursor::new();
+        cursor.set_position(5);
+        cursor.move_backward();
+        assert_eq!(cursor.position(), 4);
+    }
+
+    #[test]
+    fn test_cursor_move_to_line_start() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(8);
+        cursor.move_to_line_start(&buffer);
+        assert_eq!(cursor.position(), 6);
+    }
+
+    #[test]
+    fn test_cursor_move_to_line_end() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(6);
+        cursor.move_to_line_end(&buffer);
+        assert_eq!(cursor.position(), 11);
+    }
+
+    #[test]
+    fn test_cursor_move_up() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(8);
+        cursor.move_up(&buffer);
+        assert_eq!(cursor.position(), 2);
+    }
+
+    #[test]
+    fn test_cursor_move_down() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(2);
+        cursor.move_down(&buffer);
+        assert_eq!(cursor.position(), 8);
+    }
+
+    #[test]
+    fn test_cursor_select_line() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(7);
+        cursor.select_line(&buffer);
+        assert!(cursor.selection().is_some());
+    }
+
+    #[test]
+    fn test_cursor_select_word_at_cursor() {
+        let buffer = Buffer::from_str("hello world");
+        let mut cursor = Cursor::new();
+        cursor.set_position(7);
+        cursor.select_word_at_cursor(&buffer);
+        assert!(cursor.selection().is_some());
+    }
+
+    #[test]
+    fn test_cursor_select_range() {
+        let mut cursor = Cursor::new();
+        cursor.select_range(5, 10);
+        // After select_range, position is at end
+        assert!(cursor.selection().is_some());
+        let sel = cursor.selection().unwrap();
+        assert_eq!(sel.start, 5);
+        assert_eq!(sel.end, 10);
+    }
+}
