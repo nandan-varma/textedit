@@ -44,3 +44,23 @@ impl EditorConfig {
         self.theme.colors()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FontConfig;
+
+    #[test]
+    fn test_font_config_default() {
+        let config = FontConfig::default();
+        assert_eq!(config.size, 14.0);
+        assert_eq!(config.family, "Courier New");
+    }
+
+    #[test]
+    fn test_font_config_clone() {
+        let config1 = FontConfig::default();
+        let config2 = config1.clone();
+        assert_eq!(config1.size, config2.size);
+        assert_eq!(config1.family, config2.family);
+    }
+}

@@ -31,3 +31,60 @@ pub enum EditorError {
 }
 
 pub type Result<T> = std::result::Result<T, EditorError>;
+
+#[cfg(test)]
+mod tests {
+    use super::EditorError;
+    use std::io;
+
+    #[test]
+    fn test_editor_error_display_io() {
+        let err = EditorError::IoError(io::Error::new(io::ErrorKind::NotFound, "file not found"));
+        let msg = err.to_string();
+        assert!(msg.contains("File operation failed"));
+    }
+
+    #[test]
+    fn test_editor_error_display_buffer() {
+        let err = EditorError::BufferError("out of bounds".to_string());
+        let msg = err.to_string();
+        assert!(msg.contains("Buffer error"));
+        assert!(msg.contains("out of bounds"));
+    }
+
+    #[test]
+    fn test_editor_error_display_invalid_position() {
+        let err = EditorError::InvalidPosition(5, 10);
+        let msg = err.to_string();
+        assert!(msg.contains("Invalid position"));
+        assert!(msg.contains("5"));
+        assert!(msg.contains("10"));
+    }
+
+    #[test]
+    fn test_editor_error_display_clipboard() {
+        let err = EditorError::ClipboardError("access denied".to_string());
+        let msg = err.to_string();
+        assert!(msg.contains("Clipboard error"));
+    }
+
+    #[test]
+    fn test_editor_error_from_io_error() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "test error");
+        let editor_err: EditorError = io_err.into();
+
+        match editor_err {
+            EditorError::IoError(_e) => {
+                assert!(true);
+            }
+            _ => panic!("Expected IoError"),
+        }
+    }
+
+    #[test]
+    fn test_editor_error_debug() {
+        let err = EditorError::BufferError("test".to_string());
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("BufferError"));
+    }
+}
