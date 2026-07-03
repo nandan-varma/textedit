@@ -147,6 +147,7 @@ impl CursorGeometry {
         geometry
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_selection(
         cursor: &Cursor,
         buffer: &Buffer,
@@ -298,6 +299,7 @@ impl CursorGeometry {
     /// Build geometry for rendering match highlights
     /// This is used to highlight all search matches in the document.
     /// Accepts pre-computed `WrappedText` to avoid redundant wrap_buffer calls.
+    #[allow(clippy::too_many_arguments)]
     pub fn build_match_highlights(
         buffer: &Buffer,
         matches: &[(usize, usize)],
@@ -386,12 +388,15 @@ impl CursorGeometry {
                 let mut sel_start_x = 0.0;
                 let mut sel_end_x = 0.0;
 
-                for i in seg_start..seg_end {
+                for (i, &ch) in line_chars[seg_start..seg_end]
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, ch)| (idx + seg_start, ch))
+                {
                     if i >= line_len {
                         break;
                     }
 
-                    let ch = line_chars[i];
                     let advance = glyph_atlas.char_advance_width(ch);
 
                     if i == overlap_start {

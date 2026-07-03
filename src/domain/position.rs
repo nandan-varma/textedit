@@ -16,7 +16,7 @@ impl Position {
         Self::new(line, col)
     }
 
-    pub fn to_char_index(&self, buffer: &crate::domain::Buffer) -> Option<usize> {
+    pub fn to_char_index(self, buffer: &crate::domain::Buffer) -> Option<usize> {
         buffer.line_col_to_char(self.line, self.column)
     }
 }

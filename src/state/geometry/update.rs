@@ -268,6 +268,7 @@ impl State {
     }
 
     /// Update modal geometry (called when modal state changes)
+    #[allow(clippy::too_many_arguments)]
     pub fn update_modal_geometry(
         &mut self,
         modal_state: &ModalState,

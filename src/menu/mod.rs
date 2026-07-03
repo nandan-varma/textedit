@@ -1,7 +1,7 @@
 mod actions;
 mod handler;
-mod platform;
 mod helpers;
+mod platform;
 
 pub use actions::*;
 pub use handler::*;

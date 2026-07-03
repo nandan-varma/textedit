@@ -490,15 +490,13 @@ impl Widget for Input {
             WidgetEvent::MousePress {
                 position,
                 button: MouseButton::Left,
-            } => {
-                if bounds.contains(*position) {
-                    self.focused = true;
-                    // TODO: Implement click-to-position cursor using RenderContext
-                    // For now, move cursor to end
-                    self.cursor_pos = self.text.chars().count();
-                    self.selection = None;
-                    return (true, WidgetAction::Redraw);
-                }
+            } if bounds.contains(*position) => {
+                self.focused = true;
+                // TODO: Implement click-to-position cursor using RenderContext
+                // For now, move cursor to end
+                self.cursor_pos = self.text.chars().count();
+                self.selection = None;
+                return (true, WidgetAction::Redraw);
             }
             _ => {}
         }

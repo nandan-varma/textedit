@@ -334,6 +334,7 @@ impl FindModalGeometry {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_input_field(
         &mut self,
         layout: &EditorLayout,
@@ -410,9 +411,7 @@ impl FindModalGeometry {
         );
 
         // Draw cursor if focused and visible
-        if focused && cursor_visible && !input.is_empty()
-            || focused && cursor_visible && input.is_empty()
-        {
+        if focused && cursor_visible {
             let cursor_x = if input.is_empty() {
                 text_x
             } else {
@@ -431,6 +430,7 @@ impl FindModalGeometry {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_icon_button(
         &mut self,
         layout: &EditorLayout,
@@ -465,6 +465,7 @@ impl FindModalGeometry {
             .push((button, Rect::new(x, y, size, size)));
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_toggle_button(
         &mut self,
         layout: &EditorLayout,

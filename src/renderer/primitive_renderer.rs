@@ -217,6 +217,7 @@ impl TextGeometry {
     }
 
     /// Add a textured quad for a glyph
+    #[allow(clippy::too_many_arguments)]
     pub fn add_glyph_quad(
         &mut self,
         x1: f32,

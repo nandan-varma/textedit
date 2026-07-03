@@ -1,6 +1,9 @@
 impl State {
     /// Create a new State with all GPU resources initialized
-    pub async fn state_new_impl(window: Arc<Window>, editor_config: crate::config::EditorConfig) -> anyhow::Result<Self> {
+    pub async fn state_new_impl(
+        window: Arc<Window>,
+        editor_config: crate::config::EditorConfig,
+    ) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let scale_factor = window.scale_factor() as f32;
         let scaled_font_size = crate::state::BASE_FONT_SIZE * scale_factor;
@@ -151,7 +154,8 @@ impl State {
         });
 
         // Create pipelines
-        let text_pipeline = Self::create_text_pipeline(&device, surface_config.format, &bind_group_layout);
+        let text_pipeline =
+            Self::create_text_pipeline(&device, surface_config.format, &bind_group_layout);
         let color_pipeline = Self::create_color_pipeline(&device, surface_config.format);
 
         let config_clone = editor_config.clone();
@@ -217,12 +221,10 @@ impl State {
         self.config.colors()
     }
 }
-use std::sync::Arc;
-use winit::window::Window;
-use wgpu::{Device, Queue, Surface, RenderPipeline, BindGroup};
 use crate::renderer::glyph_cache::GlyphAtlas;
-
-
+use std::sync::Arc;
+use wgpu::{BindGroup, Device, Queue, RenderPipeline, Surface};
+use winit::window::Window;
 
 pub struct State {
     pub surface: Surface<'static>,
@@ -275,13 +277,22 @@ pub struct State {
     pub match_highlight_index_buffer: Option<wgpu::Buffer>,
     pub match_highlight_index_count: u32,
     // Modal hit test regions
-    pub modal_button_regions: Vec<(crate::ui::modal::find_modal::FindButton, crate::renderer::layout::Rect)>,
-    pub modal_input_regions: Vec<(crate::ui::modal::find_modal::FindField, crate::renderer::layout::Rect)>,
+    pub modal_button_regions: Vec<(
+        crate::ui::modal::find_modal::FindButton,
+        crate::renderer::layout::Rect,
+    )>,
+    pub modal_input_regions: Vec<(
+        crate::ui::modal::find_modal::FindField,
+        crate::renderer::layout::Rect,
+    )>,
     pub modal_rect: Option<crate::renderer::layout::Rect>,
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>, editor_config: crate::config::EditorConfig) -> anyhow::Result<Self> {
+    pub async fn new(
+        window: Arc<Window>,
+        editor_config: crate::config::EditorConfig,
+    ) -> anyhow::Result<Self> {
         State::state_new_impl(window, editor_config).await
     }
 }

@@ -21,11 +21,11 @@ impl Default for NativeFileSystem {
 
 impl FileRepository for NativeFileSystem {
     fn read(&self, path: &Path) -> Result<String> {
-        fs::read_to_string(path).map_err(|e| EditorError::IoError(e))
+        fs::read_to_string(path).map_err(EditorError::IoError)
     }
 
     fn write(&self, path: &Path, content: &str) -> Result<()> {
-        fs::write(path, content).map_err(|e| EditorError::IoError(e))
+        fs::write(path, content).map_err(EditorError::IoError)
     }
 
     fn exists(&self, path: &Path) -> bool {

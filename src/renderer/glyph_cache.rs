@@ -249,6 +249,7 @@ impl GlyphAtlas {
 
     /// Check if a glyph is already cached
     #[inline]
+    #[allow(dead_code)]
     pub fn is_cached(&self, ch: char) -> bool {
         self.cache.contains_key(&ch)
     }

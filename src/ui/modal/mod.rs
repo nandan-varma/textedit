@@ -30,18 +30,13 @@ pub enum ModalAction {
 }
 
 /// Represents the current modal state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ModalState {
     /// No modal is open
+    #[default]
     None,
     /// Find/Replace modal is open
-    Find(FindModal),
-}
-
-impl Default for ModalState {
-    fn default() -> Self {
-        Self::None
-    }
+    Find(Box<FindModal>),
 }
 
 impl ModalState {
@@ -52,12 +47,12 @@ impl ModalState {
 
     /// Open the find modal
     pub fn open_find(&mut self) {
-        *self = ModalState::Find(FindModal::new(false));
+        *self = ModalState::Find(Box::new(FindModal::new(false)));
     }
 
     /// Open the find modal with replace expanded
     pub fn open_replace(&mut self) {
-        *self = ModalState::Find(FindModal::new(true));
+        *self = ModalState::Find(Box::new(FindModal::new(true)));
     }
 
     /// Close any open modal

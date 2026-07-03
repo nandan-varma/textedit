@@ -100,6 +100,7 @@ impl Buffer {
     /// Get a character at an index, returning None if out of bounds.
     /// More efficient than as_str() for sparse access patterns.
     #[inline]
+    #[allow(dead_code)]
     pub fn char_at(&self, char_idx: usize) -> Option<char> {
         self.content.get_char(char_idx)
     }
@@ -108,7 +109,7 @@ impl Buffer {
     /// Returns false for out-of-bounds indices.
     #[inline]
     pub fn char_matches(&self, char_idx: usize, predicate: impl Fn(char) -> bool) -> bool {
-        self.content.get_char(char_idx).map_or(false, predicate)
+        self.content.get_char(char_idx).is_some_and(predicate)
     }
 
     pub fn clear(&mut self) {

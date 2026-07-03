@@ -6,7 +6,7 @@
 use crate::ports::clipboard_port::Clipboard;
 use crate::renderer::glyph_cache::GlyphAtlas;
 use crate::renderer::layout::Colors;
-use crate::ui::primitives::{Point, Primitive, Rect, RenderList};
+use crate::ui::primitives::{Point, Rect, RenderList};
 use winit::keyboard::{KeyCode, ModifiersState};
 
 /// Context provided during rendering
@@ -207,38 +207,35 @@ impl WidgetContainer {
         }
 
         // Then try all widgets for mouse events
-        match event {
-            WidgetEvent::MousePress { position, .. } => {
-                // First pass: find which widget was clicked
-                let mut clicked_widget_idx: Option<usize> = None;
-                for (i, (bounds, widget)) in self.widgets.iter().enumerate() {
-                    if bounds.contains(*position) && widget.is_focusable() {
-                        clicked_widget_idx = Some(i);
-                        break;
-                    }
-                }
-
-                // Second pass: update focus and handle event
-                if let Some(new_idx) = clicked_widget_idx {
-                    // Unfocus old widget if different
-                    if let Some(old_idx) = self.focused_index {
-                        if old_idx != new_idx {
-                            if let Some((_, old_widget)) = self.widgets.get_mut(old_idx) {
-                                old_widget.set_focused(false);
-                            }
-                        }
-                    }
-
-                    // Focus and handle event on new widget
-                    if let Some((bounds, widget)) = self.widgets.get_mut(new_idx) {
-                        widget.set_focused(true);
-                        self.focused_index = Some(new_idx);
-                        let (consumed, action) = widget.handle_event(event, *bounds, ctx);
-                        return (consumed, action);
-                    }
+        if let WidgetEvent::MousePress { position, .. } = event {
+            // First pass: find which widget was clicked
+            let mut clicked_widget_idx: Option<usize> = None;
+            for (i, (bounds, widget)) in self.widgets.iter().enumerate() {
+                if bounds.contains(*position) && widget.is_focusable() {
+                    clicked_widget_idx = Some(i);
+                    break;
                 }
             }
-            _ => {}
+
+            // Second pass: update focus and handle event
+            if let Some(new_idx) = clicked_widget_idx {
+                // Unfocus old widget if different
+                if let Some(old_idx) = self.focused_index {
+                    if old_idx != new_idx {
+                        if let Some((_, old_widget)) = self.widgets.get_mut(old_idx) {
+                            old_widget.set_focused(false);
+                        }
+                    }
+                }
+
+                // Focus and handle event on new widget
+                if let Some((bounds, widget)) = self.widgets.get_mut(new_idx) {
+                    widget.set_focused(true);
+                    self.focused_index = Some(new_idx);
+                    let (consumed, action) = widget.handle_event(event, *bounds, ctx);
+                    return (consumed, action);
+                }
+            }
         }
 
         (false, WidgetAction::None)

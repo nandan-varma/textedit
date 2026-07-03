@@ -1,6 +1,9 @@
-use muda::{Menu, MenuEvent, accelerator::{Accelerator, Code, Modifiers}, PredefinedMenuItem};
-use winit::event_loop::EventLoopProxy;
 use crate::menu::actions::MenuAction;
+use muda::{
+    accelerator::{Accelerator, Code, Modifiers},
+    Menu, MenuEvent, PredefinedMenuItem,
+};
+use winit::event_loop::EventLoopProxy;
 // use crate::menu::helpers::{item_with_accel, check};
 
 pub struct MenuHandler {
@@ -56,23 +59,21 @@ impl MenuHandler {
                     _ => None,
                 };
                 if let Some(a) = action {
-                        let _ = proxy.send_event(a);
+                    let _ = proxy.send_event(a);
                 }
             }
         }
     }
 
     pub fn build(&mut self) -> &Menu {
-        use crate::menu::helpers::item_with_accel;
         use crate::menu::helpers::check;
+        use crate::menu::helpers::item_with_accel;
         // App menu (macOS: becomes the app name menu)
         let app_menu = muda::Submenu::new("textedit", true);
         app_menu
             .append(&item_with_accel("about", "About textedit", None))
             .unwrap();
-        app_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        app_menu.append(&PredefinedMenuItem::separator()).unwrap();
         app_menu
             .append(&item_with_accel(
                 "quit",
@@ -97,9 +98,7 @@ impl MenuHandler {
                 Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyO)),
             ))
             .unwrap();
-        file_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        file_menu.append(&PredefinedMenuItem::separator()).unwrap();
         file_menu
             .append(&item_with_accel(
                 "save",
@@ -117,9 +116,7 @@ impl MenuHandler {
                 )),
             ))
             .unwrap();
-        file_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        file_menu.append(&PredefinedMenuItem::separator()).unwrap();
         file_menu
             .append(&item_with_accel(
                 "close",
@@ -147,9 +144,7 @@ impl MenuHandler {
                 )),
             ))
             .unwrap();
-        edit_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        edit_menu.append(&PredefinedMenuItem::separator()).unwrap();
         edit_menu
             .append(&item_with_accel(
                 "cut",
@@ -178,9 +173,7 @@ impl MenuHandler {
                 Some(Accelerator::new(None, Code::Delete)),
             ))
             .unwrap();
-        edit_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        edit_menu.append(&PredefinedMenuItem::separator()).unwrap();
         edit_menu
             .append(&item_with_accel(
                 "select_all",
@@ -188,9 +181,7 @@ impl MenuHandler {
                 Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyA)),
             ))
             .unwrap();
-        edit_menu
-            .append(&PredefinedMenuItem::separator())
-            .unwrap();
+        edit_menu.append(&PredefinedMenuItem::separator()).unwrap();
         edit_menu
             .append(&item_with_accel(
                 "find",
