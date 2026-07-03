@@ -22,7 +22,7 @@ cargo fmt -- --check     # Check formatting only
 
 ### Test
 ```bash
-cargo test                                    # Run all tests (142 tests)
+cargo test                                    # Run all tests (149 tests)
 cargo test test_buffer_insert                 # Run single test by name
 cargo test buffer::tests::                    # Run tests in a module
 cargo test -- --nocapture                     # Show println! output

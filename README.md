@@ -1,87 +1,123 @@
-# textedit - A High-Performance Text Editor Built with Rust, wgpu, and Winit
+# textedit — A GPU-Accelerated Text Editor in Rust
 
-A minimalist, high-performance text editor similar to Notepad++ with a foundation ready for future expansion. Built entirely with hand-rolled UI using **wgpu** for absolute performance and cross-platform support.
+A minimalist, high-performance text editor built with **wgpu** for GPU-accelerated rendering, **winit** for cross-platform windowing, and Clean Architecture principles.
 
-## Architecture Overview
-
-### Core Stack
-- **wgpu 0.20**: GPU rendering backend with multi-platform support (Vulkan, Metal, DX12, WebGPU)
-- **winit 0.30**: Cross-platform windowing and event handling (Windows, macOS, Linux)
-- **ropey 1.6**: Efficient rope data structure for text buffer operations
-- **fontdue 0.7**: Fast font rasterization for glyph rendering
-- **arboard 3.3**: Cross-platform clipboard support
-
-### Project Structure
+## Architecture
 
 ```
 src/
-├── main.rs              # Application entry point
-├── app.rs               # ApplicationHandler (winit event loop integration)
-├── state.rs             # wgpu State (device, queue, surface)
-├── config.rs            # Configuration (theme, fonts)
-├── file.rs              # File I/O operations
-├── editor/
-│   ├── mod.rs           # Editor orchestrator
-│   ├── buffer.rs        # Text buffer (ropey wrapper)
-│   ├── cursor.rs        # Cursor & selection management
-│   └── operations.rs    # Undo/redo operation history
-├── renderer/
-│   ├── mod.rs
-│   ├── text.rs          # Text layout & rendering
-│   └── glyph_cache.rs   # Glyph caching (foundation)
-└── ui/
-    ├── mod.rs
-    ├── components.rs    # Status bar, line numbers
-    └── layout.rs        # UI positioning
+├── main.rs              # Entry point
+├── config.rs            # Editor configuration
+├── error.rs             # EditorError enum (thiserror)
+├── syntax.rs            # Syntax highlighting (syntect)
+├── domain/              # Pure business logic (no external deps)
+│   ├── buffer.rs        # Rope-backed text buffer
+│   ├── cursor.rs        # Cursor & selection
+│   ├── position.rs      # Line/column position
+│   └── operations.rs    # Undo/redo history
+├── ports/               # Trait definitions
+│   ├── clipboard_port.rs
+│   ├── file_port.rs
+│   ├── render_port.rs
+│   └── window_port.rs
+├── application/         # Use cases
+│   ├── editor_service.rs
+│   └── file_service.rs
+├── infrastructure/      # Adapter implementations
+│   ├── clipboard.rs
+│   └── file_system.rs
+├── interface/           # Event handling (winit)
+│   ├── app.rs
+│   └── keyboard.rs
+├── ui/                  # UI primitives, widgets, modals
+│   ├── primitives.rs    # Point, Rect, Color, Primitive enum
+│   ├── widget.rs        # Widget trait
+│   ├── layers.rs        # Z-index layer management
+│   ├── components.rs    # Status bar, line numbers
+│   ├── layout.rs        # UI layout
+│   ├── event_router.rs  # Mouse/keyboard routing
+│   ├── widgets/         # Button, Input, Label
+│   └── modal/           # FindModal, InputField
+├── renderer/            # GPU rendering (wgpu, fontdue)
+│   ├── layout.rs        # EditorLayout, Colors
+│   ├── glyph_cache.rs   # Font atlas
+│   ├── text.rs          # Text layout
+│   ├── text_geometry.rs # Text quads
+│   ├── cursor.rs        # Cursor geometry
+│   ├── scrollbar.rs     # Scrollbar geometry
+│   ├── line_numbers.rs  # Line number geometry
+│   ├── status_bar.rs    # Status bar geometry
+│   ├── ui_background.rs # Background geometry
+│   ├── primitive_builders.rs
+│   ├── primitive_renderer.rs  # Primitive-to-GPU conversion
+│   └── modal/           # Modal geometry builders
+├── state/               # GPU state management
+│   ├── init.rs          # State struct, wgpu init
+│   ├── font.rs          # System font loading
+│   ├── render.rs        # Render pass
+│   ├── scroll.rs        # Scrolling state
+│   └── geometry/        # Buffer updates
+├── menu/                # Native menu bar (muda)
+│   ├── actions.rs       # MenuAction enum
+│   ├── handler.rs       # Menu building
+│   ├── helpers.rs       # Menu item helpers
+│   └── platform.rs      # Platform menu setup
+└── themes/              # Editor themes
+    ├── mod.rs           # EditorTheme enum
+    ├── dark.rs          # Dark theme
+    └── light.rs         # Light theme
 ```
 
-## MVP Features
+## Features
 
-### Text Editing
-- ✅ Character insertion with full Unicode support
-- ✅ Backspace and Delete keys
-- ✅ Tab support (4-space indentation)
-- ✅ Enter for newlines
-- ✅ Arrow key navigation (Left, Right, Up, Down)
-- ✅ Home and End key navigation
-- ✅ Selection management
+### Editing
+- Insert, delete, backspace with full Unicode support
+- Tab (4-space indentation), Enter for newlines
+- Arrow key navigation, Home/End
+- Selection management (Shift+Arrow)
+- **Undo/Redo** (Ctrl+Z / Ctrl+Y)
+- **Cut/Copy/Paste** (Ctrl+X / Ctrl+C / Ctrl+V)
 
 ### File Operations
-- ✅ Open and save text files
-- ✅ UTF-8 encoding support
-- ✅ File path tracking
+- **Open/Save** via native file dialogs
+- UTF-8 encoding
+- Multi-file support (new/close without quitting)
+- File modification detection
 
-### Editing Features
-- ✅ **Undo/Redo** (Ctrl+Z / Ctrl+Y)
-- ✅ **Cut/Copy/Paste** (Ctrl+X / Ctrl+C / Ctrl+V)
-- ✅ **Save** (Ctrl+S)
-- ✅ Operation history with efficient memory management
+### Find & Replace
+- **Find** (Ctrl+F) with match highlighting
+- **Find Next/Previous** (Enter/Shift+Enter, Ctrl+G/Ctrl+Shift+G)
+- **Replace** (Ctrl+H): replace one or all matches
+- Match count display
 
-### UI Components
-- ✅ Dark theme by default
-- ✅ Status bar foundation
-- ✅ Line numbers foundation
-- ✅ Window management and resizing
+### Syntax Highlighting
+- Language detection via file extension
+- Multiple themes (syntect)
+- GPU-optimized highlight caching
 
-## Building & Running
+### UI
+- Dark & Light editor themes
+- Toggle line numbers / status bar
+- Native menu bar (macOS/Windows/Linux)
+- GPU-accelerated rendering via wgpu
+- Resizable window
 
-### Prerequisites
-- Rust 1.70+ (with 2021 edition support)
-- Cargo
+## Quick Start
 
-### Build
 ```bash
-cargo build --release
-```
-
-### Run
-```bash
-./target/release/textedit
-```
-
-### Development
-```bash
+# Build & run (debug)
 cargo run
+
+# Build & run (release)
+cargo run --release
+
+# Run tests
+cargo test
+
+# Check & lint
+cargo check
+cargo clippy
+cargo fmt
 ```
 
 ## Keyboard Shortcuts
@@ -89,92 +125,32 @@ cargo run
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+C` | Copy selection |
-| `Ctrl+X` | Cut selection |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
+| `Ctrl+X` | Cut |
+| `Ctrl+C` | Copy |
 | `Ctrl+V` | Paste |
-| `Ctrl+S` | Save file |
-| `Arrow Keys` | Move cursor |
-| `Home` / `End` | Move to line start/end |
-| `Backspace` | Delete previous character |
-| `Delete` | Delete current character |
-| `Tab` | Insert 4 spaces |
-| `Enter` | New line |
+| `Ctrl+S` | Save |
+| `Ctrl+O` | Open |
+| `Ctrl+N` | New |
+| `Ctrl+W` | Close |
+| `Ctrl+F` | Find |
+| `Ctrl+G` | Find Next |
+| `Ctrl+Shift+G` | Find Previous |
+| `Ctrl+H` | Replace |
+| `Ctrl+A` | Select All |
+| `Delete` | Delete |
+| `Home` | Line start |
+| `End` | Line end |
+| `←` `→` `↑` `↓` | Move cursor |
+| `Shift+Arrow` | Extend selection |
 
-## Future Roadmap
+## Stack
 
-### Phase 2: Rendering & UI Polish
-- [ ] Proper text rendering with glyph atlas and batching
-- [ ] Syntax highlighting framework
-- [ ] Theme customization (dark/light mode toggle)
-- [ ] Custom font support with system font fallback
-- [ ] Cursor visibility and blinking animation
-- [ ] Selection highlighting with proper colors
-
-### Phase 3: Advanced Features
-- [ ] Multi-file tabs/buffers
-- [ ] Find & Replace (Ctrl+H)
-- [ ] Search highlighting (Ctrl+F)
-- [ ] Word wrap toggle
-- [ ] Line/column display in status bar
-- [ ] File modification indicator
-
-### Phase 4: Developer Experience
-- [ ] Settings file (TOML config)
-- [ ] Persistent window state
-- [ ] Recent files list
-- [ ] Configuration documentation
-- [ ] Performance profiling & optimization
-
-### Phase 5: Extended Features
-- [ ] Minimap
-- [ ] Code folding
-- [ ] Split view editing
-- [ ] Multi-cursor support
-- [ ] Macro recording
-- [ ] Plugin system foundation
-
-## Architecture Decisions
-
-### Why wgpu?
-- **Cross-platform**: Single codebase for Windows, macOS, Linux, and WebGPU (future)
-- **Performance**: Direct GPU access without runtime overhead
-- **Modern**: Uses latest graphics APIs (Vulkan, Metal, DX12)
-- **Battle-tested**: Used in production Rust projects
-
-### Why Rope for Text Buffer?
-- **Efficient insertions/deletions**: O(log n) for typical operations
-- **Memory efficient**: Doesn't require reallocating entire buffer on edits
-- **UTF-8 safe**: ropey handles Unicode grapheme boundaries correctly
-
-### Battle-Tested Dependencies
-All dependencies are carefully selected for production use:
-- `ropey`: Standard choice for text editors in Rust
-- `winit`: Industry standard for Rust GUI windowing
-- `wgpu`: WebGPU standard implementation
-- `arboard`: Only pure-Rust clipboard solution
-
-## Performance Notes
-
-The foundation is designed for performance:
-- Immediate-mode rendering ready (no retained state overhead)
-- Lazy glyph caching to avoid font rendering bottlenecks
-- Direct GPU rendering pipeline
-- No unnecessary allocations in hot paths
-- Rope data structure scales to multi-megabyte files
-
-## Contributing
-
-This is the MVP foundation. Areas ready for enhancement:
-1. **Text Rendering**: Implement actual glyph atlas rendering
-2. **UI Components**: Full implementation of line numbers and status bar
-3. **Features**: Syntax highlighting, search, etc.
-4. **Optimization**: Profile and optimize hot paths
-
-## License
-
-Check LICENSE files in repository root for licensing information.
-
----
-
-**Status**: MVP Complete. Ready for phase 2 rendering implementation.
+- **wgpu 0.20** — GPU rendering (Vulkan, Metal, DX12, WebGPU)
+- **winit 0.30** — Windowing & input
+- **ropey 1.6** — Rope data structure for text buffer
+- **fontdue 0.7** — Font rasterization
+- **syntect** — Syntax highlighting
+- **muda** — Native menu bar
+- **arboard** — Clipboard
+- **rfd** — Native file dialogs
