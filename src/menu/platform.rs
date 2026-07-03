@@ -17,13 +17,6 @@ pub fn attach_to_window(menu: &muda::Menu, window: &winit::window::Window) {
 }
 
 #[cfg(target_os = "linux")]
-pub fn attach_to_window(menu: &muda::Menu, window: &winit::window::Window) {
-    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    if let Ok(handle) = window.window_handle() {
-        if let RawWindowHandle::Xlib(h) = handle.as_raw() {
-            unsafe {
-                let _ = menu.init_for_xlib(h.window as *mut _, None);
-            }
-        }
-    }
+pub fn attach_to_window(_menu: &muda::Menu, _window: &winit::window::Window) {
+    // ponytail: muda 0.17 dropped init_for_xlib; GTK window not accessible via winit
 }
