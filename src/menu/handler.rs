@@ -234,16 +234,10 @@ impl MenuHandler {
 
         // Theme menu (UI themes)
         let theme_menu = muda::Submenu::new("Theme", true);
-        let ui_themes = [
-            ("Dracula", "theme_ui_Dracula"),
-            ("Solarized Dark", "theme_ui_SolarizedDark"),
-            ("One Dark", "theme_ui_OneDark"),
-            ("Gruvbox Dark", "theme_ui_GruvboxDark"),
-            ("Light", "theme_ui_Light"),
-        ];
-        for (label, id) in &ui_themes {
+        for (_theme, label) in crate::themes::EditorTheme::all() {
+            let id = format!("theme_ui_{label}");
             theme_menu
-                .append(&item_with_accel(id, label, None))
+                .append(&item_with_accel(&id, label, None))
                 .unwrap();
         }
 
@@ -264,11 +258,6 @@ impl MenuHandler {
         self.menu.append(&theme_menu).unwrap();
         self.menu.append(&help_menu).unwrap();
 
-        &self.menu
-    }
-
-    #[allow(dead_code)]
-    pub fn menu(&self) -> &Menu {
         &self.menu
     }
 

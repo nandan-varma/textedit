@@ -46,49 +46,47 @@ pub struct Colors {
     pub button_hover: [f32; 4],
 }
 
-// Default functions for modal colors
 fn default_modal_background() -> [f32; 4] {
-    [0.2, 0.2, 0.2, 1.0]
+    [0.165, 0.165, 0.165, 1.0]
 }
 fn default_modal_border() -> [f32; 4] {
-    [0.35, 0.35, 0.35, 1.0]
+    [0.502, 0.502, 0.502, 1.0]
 }
 fn default_input_background() -> [f32; 4] {
-    [0.15, 0.15, 0.15, 1.0]
+    [0.114, 0.114, 0.114, 1.0]
 }
 fn default_input_border() -> [f32; 4] {
-    [0.3, 0.3, 0.3, 1.0]
+    [0.337, 0.337, 0.337, 1.0]
 }
 fn default_input_border_focused() -> [f32; 4] {
-    [0.0, 0.48, 0.8, 1.0]
+    [0.235, 0.588, 0.925, 1.0]
 }
 fn default_match_highlight() -> [f32; 4] {
-    [0.5, 0.4, 0.0, 0.4]
+    [0.569, 0.455, 0.000, 0.45]
 }
 fn default_current_match_highlight() -> [f32; 4] {
-    [0.6, 0.5, 0.0, 0.7]
+    [0.698, 0.549, 0.000, 0.80]
 }
 fn default_button_background() -> [f32; 4] {
-    [0.25, 0.25, 0.25, 1.0]
+    [0.220, 0.220, 0.220, 1.0]
 }
 fn default_button_hover() -> [f32; 4] {
-    [0.35, 0.35, 0.35, 1.0]
+    [0.314, 0.314, 0.314, 1.0]
 }
 
 impl Default for Colors {
     fn default() -> Self {
         Self {
-            background: [0.12, 0.12, 0.12, 1.0],
-            gutter_background: [0.15, 0.15, 0.15, 1.0],
-            status_bar_background: [0.18, 0.18, 0.18, 1.0],
-            text_color: [0.92, 0.92, 0.92, 1.0],
-            line_number_color: [0.5, 0.5, 0.5, 1.0],
-            cursor_color: [0.9, 0.9, 0.9, 1.0],
-            selection_color: [0.3, 0.5, 0.7, 0.7],
-            gutter_separator: [0.25, 0.25, 0.25, 1.0],
-            scrollbar_track: [0.16, 0.16, 0.16, 1.0],
-            scrollbar_thumb: [0.35, 0.35, 0.35, 1.0],
-            // Modal colors
+            background: [0.114, 0.114, 0.114, 1.0],
+            gutter_background: [0.145, 0.145, 0.145, 1.0],
+            status_bar_background: [0.094, 0.094, 0.094, 1.0],
+            text_color: [0.855, 0.855, 0.855, 1.0],
+            line_number_color: [0.502, 0.502, 0.502, 1.0],
+            cursor_color: [0.937, 0.937, 0.937, 1.0],
+            selection_color: [0.230, 0.459, 0.678, 0.45],
+            gutter_separator: [0.235, 0.235, 0.235, 1.0],
+            scrollbar_track: [0.153, 0.153, 0.153, 1.0],
+            scrollbar_thumb: [0.353, 0.353, 0.353, 1.0],
             modal_background: default_modal_background(),
             modal_border: default_modal_border(),
             input_background: default_input_background(),

@@ -439,17 +439,15 @@ impl App {
                 }
                 MenuAction::SetEditorTheme(ref theme_name) => {
                     if let Some(state) = &mut self.state {
-                        use crate::themes::EditorTheme;
-                        let new_theme = match theme_name.as_str() {
-                            "Dracula" => EditorTheme::Dracula,
-                            "SolarizedDark" => EditorTheme::SolarizedDark,
-                            "OneDark" => EditorTheme::OneDark,
-                            "GruvboxDark" => EditorTheme::GruvboxDark,
-                            "Light" => EditorTheme::Light,
-                            _ => EditorTheme::Dracula,
-                        };
-                        state.config.theme = new_theme;
-                        state.window().request_redraw();
+                        match theme_name.parse::<crate::themes::EditorTheme>() {
+                            Ok(theme) => {
+                                state.config.theme = theme;
+                                state.window().request_redraw();
+                            }
+                            Err(e) => {
+                                log::warn!("Unknown UI theme '{theme_name}': {e}");
+                            }
+                        }
                     }
                 }
                 MenuAction::New => {

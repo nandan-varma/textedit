@@ -12,7 +12,7 @@ impl Default for FontConfig {
     fn default() -> Self {
         Self {
             size: 14.0,
-            family: "Courier New".to_string(),
+            family: "monospace".to_string(),
         }
     }
 }
@@ -30,7 +30,7 @@ pub struct EditorConfig {
 impl Default for EditorConfig {
     fn default() -> Self {
         Self {
-            theme: EditorTheme::Dracula,
+            theme: EditorTheme::Dark,
             font: FontConfig::default(),
             tab_width: 4,
             use_spaces: true,
@@ -53,7 +53,7 @@ mod tests {
     fn test_font_config_default() {
         let config = FontConfig::default();
         assert_eq!(config.size, 14.0);
-        assert_eq!(config.family, "Courier New");
+        assert_eq!(config.family, "monospace");
     }
 
     #[test]

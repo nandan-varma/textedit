@@ -29,6 +29,9 @@ pub enum EditorError {
 
     #[error("Syntax highlighting error: {0}")]
     SyntaxError(String),
+
+    #[error("Invalid theme: {0}")]
+    InvalidTheme(String),
 }
 
 pub type Result<T> = std::result::Result<T, EditorError>;
