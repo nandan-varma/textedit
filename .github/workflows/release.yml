@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} --generate-notes --title ${{ github.ref_name }}
+
+  build:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            ext: ""
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            ext: ""
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            ext: ""
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system deps (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y libxkbcommon-dev libwayland-dev
+      - run: rustup target add ${{ matrix.target }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: release-${{ matrix.target }}-
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package & upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BIN="target/${{ matrix.target }}/release/textedit${{ matrix.ext }}"
+          NAME="textedit-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$NAME" && cp "$BIN" "$NAME/"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            7z a "$NAME.zip" "$NAME" && gh release upload ${{ github.ref_name }} "$NAME.zip" --clobber
+          else
+            tar czf "$NAME.tar.gz" "$NAME" && gh release upload ${{ github.ref_name }} "$NAME.tar.gz" --clobber
+          fi
