@@ -1,4 +1,5 @@
 use textedit::application::EditorService;
+use textedit::domain::Operation;
 
 fn create_editor_with_content(content: &str) -> EditorService {
     let mut editor = EditorService::new();
@@ -245,4 +246,101 @@ fn test_editor_service_find_not_found() {
 
     let result = editor.find_next();
     assert!(!result);
+}
+
+#[test]
+fn test_editor_service_find_prev_after_find_next_returns_previous_match_not_same_one() {
+    let mut editor = create_editor_with_content("hello world hello");
+    editor.set_find_query(Some("hello".to_string()));
+
+    // Land on the second "hello" (positions 12..17).
+    editor.find_next();
+    editor.find_next();
+    let landed = editor.cursor().selection().unwrap().range();
+    assert_eq!(landed, (12, 17));
+
+    // Going backward from here must return the FIRST "hello", not re-select
+    // the one we're already on.
+    let result = editor.find_prev();
+    assert!(result);
+    let (start, end) = editor.cursor().selection().unwrap().range();
+    assert_eq!((start, end), (0, 5));
+}
+
+#[test]
+fn test_editor_service_undo_insert_removes_correct_char_count_for_multibyte_text() {
+    let mut editor = create_editor_with_content("ab");
+
+    // Simulate what the UI layer does when the user types "é" (1 char, 2 UTF-8 bytes)
+    // at position 1, turning "ab" into "aéb".
+    editor.buffer_mut().insert(1, "é");
+    editor.history_mut().push(Operation::Insert {
+        position: 1,
+        text: "é".to_string(),
+    });
+    assert_eq!(editor.buffer().as_str(), "aéb");
+
+    editor.undo();
+
+    assert_eq!(editor.buffer().as_str(), "ab");
+    assert_eq!(editor.cursor().position(), 1);
+}
+
+#[test]
+fn test_editor_service_redo_insert_reinserts_correct_multibyte_text() {
+    let mut editor = create_editor_with_content("ab");
+    editor.buffer_mut().insert(1, "é");
+    editor.history_mut().push(Operation::Insert {
+        position: 1,
+        text: "é".to_string(),
+    });
+
+    editor.undo();
+    assert_eq!(editor.buffer().as_str(), "ab");
+
+    editor.redo();
+    assert_eq!(editor.buffer().as_str(), "aéb");
+    assert_eq!(editor.cursor().position(), 2);
+}
+
+#[test]
+fn test_editor_service_undo_delete_reinserts_correct_multibyte_text_and_cursor() {
+    let mut editor = create_editor_with_content("aéb");
+
+    // Simulate deleting "é" (1 char, 2 bytes) at position 1.
+    editor.buffer_mut().remove(1, 1);
+    editor.history_mut().push(Operation::Delete {
+        position: 1,
+        text: "é".to_string(),
+    });
+    assert_eq!(editor.buffer().as_str(), "ab");
+
+    editor.undo();
+
+    assert_eq!(editor.buffer().as_str(), "aéb");
+    // Cursor should land after the reinserted char (1 char, not 2 bytes).
+    assert_eq!(editor.cursor().position(), 2);
+}
+
+#[test]
+fn test_editor_service_paste_positions_cursor_by_char_count_not_byte_count() {
+    let mut editor = create_editor_with_content("ab");
+    editor.cursor_mut().set_position(1);
+
+    // "café" is 4 chars but 5 bytes (é is 2 bytes).
+    editor.paste("café".to_string());
+
+    assert_eq!(editor.buffer().as_str(), "acaféb");
+    assert_eq!(editor.cursor().position(), 5);
+}
+
+#[test]
+fn test_editor_service_paste_replaces_selection() {
+    let mut editor = create_editor_with_content("hello world");
+    editor.cursor_mut().select_range(0, 5);
+
+    editor.paste("goodbye".to_string());
+
+    assert_eq!(editor.buffer().as_str(), "goodbye world");
+    assert_eq!(editor.cursor().position(), 7);
 }

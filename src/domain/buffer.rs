@@ -46,8 +46,12 @@ impl Buffer {
         self.content.len_lines()
     }
 
+    /// Line content *without* the trailing line terminator (`\n`, `\r\n`, or `\r`).
+    /// Ropey's own `Rope::line` includes the terminator for every line except
+    /// the last, which would otherwise make col/length math (and cursor
+    /// End-of-line placement) land one line too far for every non-last line.
     pub fn line(&self, line_idx: usize) -> Option<String> {
-        self.content.get_line(line_idx).map(|l| l.to_string())
+        self.line_slice(line_idx).map(|s| s.to_string())
     }
 
     #[inline]
@@ -58,20 +62,23 @@ impl Buffer {
     #[inline]
     pub fn line_slice(&self, line_idx: usize) -> Option<RopeSlice<'_>> {
         if line_idx < self.content.len_lines() {
-            Some(self.content.line(line_idx))
+            Some(strip_line_ending(self.content.line(line_idx)))
         } else {
             None
         }
     }
 
     pub fn line_len_chars(&self, line_idx: usize) -> usize {
-        self.content
-            .get_line(line_idx)
-            .map(|l| l.len_chars())
+        self.line_slice(line_idx)
+            .map(|s| s.len_chars())
             .unwrap_or(0)
     }
 
+    /// Clamps out-of-bounds indices to the end of the buffer rather than
+    /// panicking, since callers (e.g. cursor navigation after an edit) may
+    /// transiently pass a char index past the current buffer length.
     pub fn char_to_line_col(&self, char_idx: usize) -> (usize, usize) {
+        let char_idx = char_idx.min(self.content.len_chars());
         let line = self.content.char_to_line(char_idx);
         let line_start = self.content.line_to_char(line);
         let col = char_idx - line_start;
@@ -81,7 +88,7 @@ impl Buffer {
     pub fn line_col_to_char(&self, line: usize, col: usize) -> Option<usize> {
         if line < self.content.len_lines() {
             let line_start = self.content.line_to_char(line);
-            let line_len = self.content.line(line).len_chars();
+            let line_len = self.line_len_chars(line);
             if col <= line_len {
                 return Some(line_start + col);
             }
@@ -89,12 +96,27 @@ impl Buffer {
         None
     }
 
+    /// Clamps an out-of-bounds line index to the end of the buffer rather
+    /// than panicking.
     pub fn line_to_char(&self, line: usize) -> usize {
+        let line = line.min(self.content.len_lines());
         self.content.line_to_char(line)
     }
 
     pub fn as_str(&self) -> String {
         self.content.to_string()
+    }
+
+    /// Extract a substring by character range without copying the whole buffer.
+    /// Clamps to buffer bounds; returns an empty string for an empty or invalid range.
+    pub fn slice_string(&self, start: usize, end: usize) -> String {
+        let len = self.content.len_chars();
+        let start = start.min(len);
+        let end = end.min(len);
+        if start >= end {
+            return String::new();
+        }
+        self.content.slice(start..end).to_string()
     }
 
     /// Get a character at an index, returning None if out of bounds.
@@ -119,6 +141,25 @@ impl Buffer {
     pub fn set_content(&mut self, text: &str) {
         self.content = Rope::from(text);
     }
+}
+
+/// Trims a trailing `\r\n`, `\n`, or `\r` off a ropey line slice.
+fn strip_line_ending(line: RopeSlice<'_>) -> RopeSlice<'_> {
+    let len = line.len_chars();
+    if len == 0 {
+        return line;
+    }
+    let last = line.char(len - 1);
+    if last == '\n' {
+        if len >= 2 && line.char(len - 2) == '\r' {
+            return line.slice(0..len - 2);
+        }
+        return line.slice(0..len - 1);
+    }
+    if last == '\r' {
+        return line.slice(0..len - 1);
+    }
+    line
 }
 
 impl Clone for Buffer {
@@ -216,5 +257,73 @@ mod tests {
     fn test_buffer_default() {
         let buffer = Buffer::default();
         assert_eq!(buffer.len_chars(), 0);
+    }
+
+    #[test]
+    fn test_buffer_slice_string() {
+        let buffer = Buffer::from_str("hello world");
+        assert_eq!(buffer.slice_string(0, 5), "hello");
+        assert_eq!(buffer.slice_string(6, 11), "world");
+        assert_eq!(buffer.slice_string(0, 0), "");
+    }
+
+    #[test]
+    fn test_buffer_slice_string_multibyte() {
+        // "héllo" has 5 chars but 6 bytes (é is 2 bytes in UTF-8)
+        let buffer = Buffer::from_str("héllo world");
+        assert_eq!(buffer.slice_string(0, 5), "héllo");
+        assert_eq!(buffer.slice_string(1, 2), "é");
+        assert_eq!(buffer.slice_string(6, 11), "world");
+    }
+
+    #[test]
+    fn test_buffer_line_excludes_trailing_newline_for_non_last_line() {
+        let buffer = Buffer::from_str("line1\nline2\nline3");
+        assert_eq!(buffer.line(0), Some("line1".to_string()));
+        assert_eq!(buffer.line(1), Some("line2".to_string()));
+        assert_eq!(buffer.line(2), Some("line3".to_string()));
+    }
+
+    #[test]
+    fn test_buffer_line_slice_excludes_trailing_newline() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let slice = buffer.line_slice(0).unwrap();
+        assert_eq!(slice.to_string(), "hello");
+    }
+
+    #[test]
+    fn test_buffer_line_len_chars_excludes_trailing_newline() {
+        let buffer = Buffer::from_str("hello\nworld");
+        assert_eq!(buffer.line_len_chars(0), 5);
+        assert_eq!(buffer.line_len_chars(1), 5);
+    }
+
+    #[test]
+    fn test_buffer_line_col_to_char_rejects_col_past_visible_text() {
+        // Line 0 is "hello" (5 visible chars); the newline itself is not
+        // an addressable column.
+        let buffer = Buffer::from_str("hello\nworld");
+        assert_eq!(buffer.line_col_to_char(0, 5), Some(5));
+        assert_eq!(buffer.line_col_to_char(0, 6), None);
+    }
+
+    #[test]
+    fn test_buffer_char_to_line_col_clamps_instead_of_panicking() {
+        let buffer = Buffer::from_str("hello");
+        assert_eq!(buffer.char_to_line_col(100), (0, 5));
+    }
+
+    #[test]
+    fn test_buffer_line_to_char_clamps_instead_of_panicking() {
+        let buffer = Buffer::from_str("hello");
+        assert_eq!(buffer.line_to_char(1), 5);
+        assert_eq!(buffer.line_to_char(100), 5);
+    }
+
+    #[test]
+    fn test_buffer_remove_middle() {
+        let mut buffer = Buffer::from_str("hello world");
+        buffer.remove(5, 6);
+        assert_eq!(buffer.as_str(), "hello");
     }
 }

@@ -1,6 +1,7 @@
 use std::fs;
 use tempfile::TempDir;
 use textedit::infrastructure::NativeFileSystem;
+use textedit::ports::FileRepository;
 
 #[test]
 fn test_native_file_system_read_nonexistent_returns_error() {
@@ -88,14 +89,10 @@ fn test_native_file_system_exists_false() {
 
 #[test]
 fn test_native_file_system_new() {
-    let fs = NativeFileSystem::new();
-    // Just verify it can be created
-    assert!(true);
+    let _fs = NativeFileSystem::new();
 }
 
 #[test]
 fn test_native_file_system_default() {
-    let fs = NativeFileSystem::default();
-    // Just verify it can be created
-    assert!(true);
+    let _fs = NativeFileSystem::default();
 }

@@ -99,9 +99,13 @@ fn test_cursor_extend_selection_new() {
 
 #[test]
 fn test_cursor_extend_selection_existing() {
+    // set_position() always clears any selection (see
+    // test_cursor_set_position_clears_selection), so an existing selection
+    // can only be extended via repeated extend_selection() calls - the
+    // anchor (start) must stay put across them.
     let mut cursor = Cursor::new();
-    cursor.set_selection_start(5);
-    cursor.set_position(8);
+    cursor.set_position(5);
+    cursor.extend_selection(8);
     cursor.extend_selection(10);
 
     let sel = cursor.selection().unwrap();
@@ -329,7 +333,9 @@ fn test_cursor_select_range() {
     let mut cursor = Cursor::new();
     cursor.select_range(5, 10);
 
-    assert_eq!(cursor.position(), 5);
+    // Cursor lands at the END of the range (relied on by find_next/find_prev
+    // so repeated searches advance instead of re-matching the same spot).
+    assert_eq!(cursor.position(), 10);
     let sel = cursor.selection().unwrap();
     assert_eq!(sel.start, 5);
     assert_eq!(sel.end, 10);
@@ -337,13 +343,15 @@ fn test_cursor_select_range() {
 
 #[test]
 fn test_cursor_preferred_col_preserved() {
-    let buffer = Buffer::from_str("hello\nworld");
+    // Preferred column should survive a trip through a shorter line and
+    // snap back once a line long enough is reached again.
+    let buffer = Buffer::from_str("hello\nhi\nworld");
     let mut cursor = Cursor::new();
 
-    // Move to position 3 in first line
-    cursor.set_position(3);
-    cursor.move_down(&buffer);
+    cursor.set_position(4); // col 4 in "hello"
+    cursor.move_down(&buffer); // "hi" is only 2 chars; clamps, but remembers col 4
+    cursor.move_down(&buffer); // "world" is long enough again; should snap back to col 4
 
-    // Preferred column should be preserved
-    assert_eq!(cursor.position(), 3);
+    let (_, col) = buffer.char_to_line_col(cursor.position());
+    assert_eq!(col, 4);
 }

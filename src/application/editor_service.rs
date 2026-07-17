@@ -104,7 +104,16 @@ impl EditorService {
         }
         self.last_find_query = Some(query.clone());
 
-        let from = self.cursor.position().min(self.buffer.len_chars());
+        // Search backward from the start of the current match (if any),
+        // not its end - otherwise the current match's own range is still
+        // inside the search window and gets re-selected instead of the
+        // previous occurrence.
+        let from = match self.cursor.selection() {
+            Some(sel) if !sel.is_empty() => sel.range().0,
+            _ => self.cursor.position(),
+        }
+        .min(self.buffer.len_chars());
+
         if let Some((s, e)) = find_prev_range(&self.buffer, &query, from) {
             self.cursor.select_range(s, e);
             return true;
@@ -206,13 +215,7 @@ impl EditorService {
         };
 
         let (start, end) = selection.range();
-        let selected_text: String = self
-            .buffer
-            .as_str()
-            .chars()
-            .skip(start)
-            .take(end - start)
-            .collect();
+        let selected_text = self.buffer.slice_string(start, end);
 
         if selected_text != query {
             return false;
@@ -274,13 +277,7 @@ impl EditorService {
         matches.reverse();
 
         for (start, end) in &matches {
-            let deleted_text: String = self
-                .buffer
-                .as_str()
-                .chars()
-                .skip(*start)
-                .take(*end - *start)
-                .collect();
+            let deleted_text = self.buffer.slice_string(*start, *end);
 
             self.buffer.remove(*start, qlen);
             self.history.push(Operation::Delete {
@@ -320,6 +317,75 @@ impl EditorService {
         self.buffer.set_content(&content);
         self.cursor.set_position(0);
         self.history.clear();
+    }
+
+    /// Undo the last operation. Returns true if something was undone.
+    ///
+    /// Operation text length must be measured in chars, not bytes: `Buffer`
+    /// indexes by char, so any multi-byte UTF-8 text would otherwise cause
+    /// the wrong number of characters to be removed (or a silent no-op).
+    pub fn undo(&mut self) -> bool {
+        let Some(op) = self.history.undo() else {
+            return false;
+        };
+        match op {
+            Operation::Insert { position, text } => {
+                self.buffer.remove(position, text.chars().count());
+                self.cursor.set_position(position);
+            }
+            Operation::Delete { position, text } => {
+                self.buffer.insert(position, &text);
+                self.cursor.set_position(position + text.chars().count());
+            }
+        }
+        self.is_modified = true;
+        true
+    }
+
+    /// Redo the last undone operation. Returns true if something was redone.
+    pub fn redo(&mut self) -> bool {
+        let Some(op) = self.history.redo() else {
+            return false;
+        };
+        match op {
+            Operation::Insert { position, text } => {
+                self.buffer.insert(position, &text);
+                self.cursor.set_position(position + text.chars().count());
+            }
+            Operation::Delete { position, text } => {
+                self.buffer.remove(position, text.chars().count());
+                self.cursor.set_position(position);
+            }
+        }
+        self.is_modified = true;
+        true
+    }
+
+    /// Replace the current selection (if any) with `text`, then insert `text`
+    /// at the cursor. Cursor is positioned by char count, not byte count, so
+    /// multi-byte pasted text lands the cursor at the correct offset.
+    pub fn paste(&mut self, text: String) {
+        if let Some(sel) = self.cursor.selection() {
+            if !sel.is_empty() {
+                let (s, e) = sel.range();
+                let removed = self.buffer.slice_string(s, e);
+                self.buffer.remove(s, e - s);
+                self.history.push(Operation::Delete {
+                    position: s,
+                    text: removed,
+                });
+                self.cursor.set_position(s);
+            }
+        }
+
+        let pos = self.cursor.position();
+        self.buffer.insert(pos, &text);
+        self.cursor.set_position(pos + text.chars().count());
+        self.history.push(Operation::Insert {
+            position: pos,
+            text,
+        });
+        self.is_modified = true;
     }
 }
 

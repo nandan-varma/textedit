@@ -12,6 +12,32 @@ use crate::menu::{MenuAction, MenuHandler};
 use crate::state::State;
 use crate::ui::modal::{ModalAction, ModalState};
 
+/// Builds a save-file dialog pre-filled with the editor's current file name.
+/// Falls back to leaving the starting directory up to the OS default rather
+/// than panicking if the current working directory is unavailable (e.g. it
+/// was deleted or unmounted while the app was running).
+fn save_dialog_for(editor: &EditorService) -> rfd::FileDialog {
+    let mut dialog = rfd::FileDialog::new()
+        .add_filter(
+            "Text Files",
+            &[
+                "txt", "md", "rs", "json", "toml", "yaml", "yml", "html", "css", "js", "ts",
+            ],
+        )
+        .add_filter("All Files", &["*"]);
+
+    if let Ok(dir) = std::env::current_dir() {
+        dialog = dialog.set_directory(dir);
+    }
+
+    let file_name = editor
+        .file_path()
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    dialog.set_file_name(file_name)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum MouseButtonState {
     Released,
@@ -349,29 +375,7 @@ impl App {
                     };
 
                     if do_save_as {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter(
-                                "Text Files",
-                                &[
-                                    "txt", "md", "rs", "json", "toml", "yaml", "yml", "html",
-                                    "css", "js", "ts",
-                                ],
-                            )
-                            .add_filter("All Files", &["*"])
-                            .set_directory(std::env::current_dir().unwrap())
-                            .set_file_name(
-                                editor
-                                    .file_path()
-                                    .map(|p| {
-                                        std::path::Path::new(p)
-                                            .file_name()
-                                            .and_then(|n| n.to_str())
-                                            .unwrap_or("")
-                                    })
-                                    .unwrap_or(""),
-                            )
-                            .save_file()
-                        {
+                        if let Some(path) = save_dialog_for(editor).save_file() {
                             let path_str = path.to_string_lossy().to_string();
                             let content = editor.buffer().as_str();
                             if std::fs::write(&path_str, content).is_ok() {
@@ -382,29 +386,7 @@ impl App {
                     }
                 }
                 MenuAction::SaveAs => {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .add_filter(
-                            "Text Files",
-                            &[
-                                "txt", "md", "rs", "json", "toml", "yaml", "yml", "html", "css",
-                                "js", "ts",
-                            ],
-                        )
-                        .add_filter("All Files", &["*"])
-                        .set_directory(std::env::current_dir().unwrap())
-                        .set_file_name(
-                            editor
-                                .file_path()
-                                .map(|p| {
-                                    std::path::Path::new(p)
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                        .unwrap_or("")
-                                })
-                                .unwrap_or(""),
-                        )
-                        .save_file()
-                    {
+                    if let Some(path) = save_dialog_for(editor).save_file() {
                         let path_str = path.to_string_lossy().to_string();
                         let content = editor.buffer().as_str();
                         if std::fs::write(&path_str, content).is_ok() {
@@ -456,44 +438,16 @@ impl App {
                 MenuAction::Close => {}
                 MenuAction::Quit => {}
                 MenuAction::Undo => {
-                    if let Some(op) = editor.history_mut().undo() {
-                        match op {
-                            crate::domain::Operation::Insert { position, text } => {
-                                editor.buffer_mut().remove(position, text.len());
-                                editor.cursor_mut().set_position(position);
-                            }
-                            crate::domain::Operation::Delete { position, text } => {
-                                editor.buffer_mut().insert(position, &text);
-                                editor.cursor_mut().set_position(position + text.len());
-                            }
-                        }
-                    }
+                    editor.undo();
                 }
                 MenuAction::Redo => {
-                    if let Some(op) = editor.history_mut().redo() {
-                        match op {
-                            crate::domain::Operation::Insert { position, text } => {
-                                editor.buffer_mut().insert(position, &text);
-                                editor.cursor_mut().set_position(position + text.len());
-                            }
-                            crate::domain::Operation::Delete { position, text } => {
-                                editor.buffer_mut().remove(position, text.len());
-                                editor.cursor_mut().set_position(position);
-                            }
-                        }
-                    }
+                    editor.redo();
                 }
                 MenuAction::Cut => {
                     if let Some(sel) = editor.cursor().selection() {
                         if !sel.is_empty() {
                             let (s, e) = sel.range();
-                            let text = editor
-                                .buffer()
-                                .as_str()
-                                .chars()
-                                .skip(s)
-                                .take(e - s)
-                                .collect::<String>();
+                            let text = editor.buffer().slice_string(s, e);
                             if let Ok(mut cb) = arboard::Clipboard::new() {
                                 let _ = cb.set_text(text.clone());
                             }
@@ -509,13 +463,7 @@ impl App {
                     if let Some(sel) = editor.cursor().selection() {
                         if !sel.is_empty() {
                             let (s, e) = sel.range();
-                            let text = editor
-                                .buffer()
-                                .as_str()
-                                .chars()
-                                .skip(s)
-                                .take(e - s)
-                                .collect::<String>();
+                            let text = editor.buffer().slice_string(s, e);
                             if let Ok(mut cb) = arboard::Clipboard::new() {
                                 let _ = cb.set_text(text);
                             }
@@ -525,31 +473,7 @@ impl App {
                 MenuAction::Paste => {
                     if let Ok(mut cb) = arboard::Clipboard::new() {
                         if let Ok(text) = cb.get_text() {
-                            if let Some(sel) = editor.cursor().selection() {
-                                if !sel.is_empty() {
-                                    let (s, e) = sel.range();
-                                    let txt = editor
-                                        .buffer()
-                                        .as_str()
-                                        .chars()
-                                        .skip(s)
-                                        .take(e - s)
-                                        .collect::<String>();
-                                    editor.buffer_mut().remove(s, e - s);
-                                    editor.history_mut().push(crate::domain::Operation::Delete {
-                                        position: s,
-                                        text: txt,
-                                    });
-                                    editor.cursor_mut().set_position(s);
-                                }
-                            }
-                            let pos = editor.cursor().position();
-                            editor.buffer_mut().insert(pos, &text);
-                            editor.cursor_mut().set_position(pos + text.len());
-                            editor.history_mut().push(crate::domain::Operation::Insert {
-                                position: pos,
-                                text,
-                            });
+                            editor.paste(text);
                         }
                     }
                 }
@@ -557,13 +481,7 @@ impl App {
                     if let Some(sel) = editor.cursor().selection() {
                         if !sel.is_empty() {
                             let (s, e) = sel.range();
-                            let txt = editor
-                                .buffer()
-                                .as_str()
-                                .chars()
-                                .skip(s)
-                                .take(e - s)
-                                .collect::<String>();
+                            let txt = editor.buffer().slice_string(s, e);
                             editor.buffer_mut().remove(s, e - s);
                             editor.history_mut().push(crate::domain::Operation::Delete {
                                 position: s,

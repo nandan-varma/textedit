@@ -58,8 +58,8 @@ fn test_buffer_insert_at_exact_length() {
 #[test]
 fn test_buffer_remove_middle() {
     let mut buffer = Buffer::from_str("hello world");
-    buffer.remove(5, 6);
-    assert_eq!(buffer.as_str(), "hellord");
+    buffer.remove(5, 6); // removes " world" (chars 5..11)
+    assert_eq!(buffer.as_str(), "hello");
 }
 
 #[test]

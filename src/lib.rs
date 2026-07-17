@@ -1,0 +1,13 @@
+pub mod application;
+pub mod config;
+pub mod domain;
+pub mod error;
+pub mod infrastructure;
+pub mod interface;
+pub mod menu;
+pub mod ports;
+pub mod renderer;
+pub mod state;
+pub mod syntax;
+pub mod themes;
+pub mod ui;

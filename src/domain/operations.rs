@@ -24,38 +24,23 @@ impl OperationHistory {
         self.redo_stack.clear();
     }
 
+    /// Returns the original operation to undo. The caller is expected to
+    /// apply its *inverse* (Insert -> remove, Delete -> insert).
     pub fn undo(&mut self) -> Option<Operation> {
         if let Some(op) = self.undo_stack.pop_back() {
-            let reverse = match &op {
-                Operation::Insert { position, text } => Operation::Delete {
-                    position: *position,
-                    text: text.clone(),
-                },
-                Operation::Delete { position, text } => Operation::Insert {
-                    position: *position,
-                    text: text.clone(),
-                },
-            };
-            self.redo_stack.push_back(reverse);
+            self.redo_stack.push_back(op.clone());
             Some(op)
         } else {
             None
         }
     }
 
+    /// Returns the original operation to redo. The caller is expected to
+    /// apply it literally (Insert -> insert, Delete -> remove), replaying
+    /// exactly what was undone.
     pub fn redo(&mut self) -> Option<Operation> {
         if let Some(op) = self.redo_stack.pop_back() {
-            let reverse = match &op {
-                Operation::Insert { position, text } => Operation::Delete {
-                    position: *position,
-                    text: text.clone(),
-                },
-                Operation::Delete { position, text } => Operation::Insert {
-                    position: *position,
-                    text: text.clone(),
-                },
-            };
-            self.undo_stack.push_back(reverse);
+            self.undo_stack.push_back(op.clone());
             Some(op)
         } else {
             None
@@ -125,6 +110,74 @@ mod tests {
         });
         history.undo();
         assert!(history.can_redo());
+    }
+
+    /// redo() must hand back the ORIGINAL operation (for the caller to apply
+    /// literally), not its inverse. Callers (apply_undo/apply_redo in the UI
+    /// layer) apply undo()'s result inverted and redo()'s result literally,
+    /// so redo() returning the inverse silently replays the undo instead of
+    /// restoring what was undone.
+    #[test]
+    fn test_history_redo_returns_original_insert_op_not_its_inverse() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "hello".to_string(),
+        });
+        history.undo();
+
+        let redone = history.redo().expect("should have a redo entry");
+        match redone {
+            Operation::Insert { position, text } => {
+                assert_eq!(position, 0);
+                assert_eq!(text, "hello");
+            }
+            Operation::Delete { .. } => {
+                panic!("redo() returned the inverse (Delete) instead of the original Insert");
+            }
+        }
+    }
+
+    #[test]
+    fn test_history_redo_returns_original_delete_op_not_its_inverse() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Delete {
+            position: 3,
+            text: "xyz".to_string(),
+        });
+        history.undo();
+
+        let redone = history.redo().expect("should have a redo entry");
+        match redone {
+            Operation::Delete { position, text } => {
+                assert_eq!(position, 3);
+                assert_eq!(text, "xyz");
+            }
+            Operation::Insert { .. } => {
+                panic!("redo() returned the inverse (Insert) instead of the original Delete");
+            }
+        }
+    }
+
+    /// Full round trip: undo() must still be invertible after a redo() cycle.
+    #[test]
+    fn test_history_undo_after_redo_after_undo_returns_original_insert() {
+        let mut history = OperationHistory::new();
+        history.push(Operation::Insert {
+            position: 0,
+            text: "hello".to_string(),
+        });
+        history.undo();
+        history.redo();
+
+        let op = history.undo().expect("should be undoable again");
+        match op {
+            Operation::Insert { position, text } => {
+                assert_eq!(position, 0);
+                assert_eq!(text, "hello");
+            }
+            Operation::Delete { .. } => panic!("undo() after redo() returned the wrong op"),
+        }
     }
 
     #[test]

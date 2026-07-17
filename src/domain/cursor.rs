@@ -113,7 +113,7 @@ impl Cursor {
                 idx
             } else if let Some(line_str) = buffer.line(line - 1) {
                 buffer
-                    .line_col_to_char(line - 1, line_str.len())
+                    .line_col_to_char(line - 1, line_str.chars().count())
                     .unwrap_or(target_col)
             } else {
                 return;
@@ -131,7 +131,7 @@ impl Cursor {
                 idx
             } else if let Some(line_str) = buffer.line(line + 1) {
                 buffer
-                    .line_col_to_char(line + 1, line_str.len())
+                    .line_col_to_char(line + 1, line_str.chars().count())
                     .unwrap_or(target_col)
             } else {
                 return;
@@ -227,7 +227,7 @@ impl Cursor {
         let (line, _) = buffer.char_to_line_col(self.position);
         let start = buffer.line_to_char(line);
         let end = if let Some(line_str) = buffer.line(line) {
-            start + line_str.len()
+            start + line_str.chars().count()
         } else {
             start
         };
@@ -283,7 +283,7 @@ impl Cursor {
     pub fn move_to_line_end(&mut self, buffer: &Buffer) {
         let (line, _) = buffer.char_to_line_col(self.position);
         if let Some(line_str) = buffer.line(line) {
-            let col = line_str.len();
+            let col = line_str.chars().count();
             if let Some(idx) = buffer.line_col_to_char(line, col) {
                 self.position = idx;
                 self.preferred_col = Some(col);
@@ -299,7 +299,7 @@ impl Cursor {
             if let Some(idx) = buffer.line_col_to_char(line - 1, target_col) {
                 self.position = idx;
             } else if let Some(line_str) = buffer.line(line - 1) {
-                if let Some(idx) = buffer.line_col_to_char(line - 1, line_str.len()) {
+                if let Some(idx) = buffer.line_col_to_char(line - 1, line_str.chars().count()) {
                     self.position = idx;
                 }
             }
@@ -315,7 +315,7 @@ impl Cursor {
             if let Some(idx) = buffer.line_col_to_char(line + 1, target_col) {
                 self.position = idx;
             } else if let Some(line_str) = buffer.line(line + 1) {
-                if let Some(idx) = buffer.line_col_to_char(line + 1, line_str.len()) {
+                if let Some(idx) = buffer.line_col_to_char(line + 1, line_str.chars().count()) {
                     self.position = idx;
                 }
             }
@@ -439,6 +439,21 @@ mod tests {
         cursor.set_position(6);
         cursor.move_to_line_end(&buffer);
         assert_eq!(cursor.position(), 11);
+    }
+
+    /// Regression test: moving to line-end on a line that is NOT the last
+    /// line must land right before the newline (index 5, after 'o' in
+    /// "hello"), not jump past it into the start of the next line (index 6,
+    /// 'w' in "world"). This was previously wrong because `Buffer::line()`
+    /// included the trailing '\n' in its length for every non-last line.
+    #[test]
+    fn test_cursor_move_to_line_end_on_non_last_line_stops_before_newline() {
+        let buffer = Buffer::from_str("hello\nworld");
+        let mut cursor = Cursor::new();
+        cursor.set_position(2); // inside "hello"
+        cursor.move_to_line_end(&buffer);
+        assert_eq!(cursor.position(), 5);
+        assert_eq!(buffer.char_to_line_col(cursor.position()), (0, 5));
     }
 
     #[test]

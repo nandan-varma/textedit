@@ -92,32 +92,14 @@ fn test_history_push_clears_redo_stack() {
     assert!(!history.can_redo());
 }
 
+// undo() returns the ORIGINAL operation (not its inverse) - the caller
+// (apply_undo in the UI layer) is the one that inverts it (Insert -> remove,
+// Delete -> insert). This mirrors what push() recorded.
 #[test]
-fn test_history_undo_insert_returns_delete_op() {
+fn test_history_undo_insert_returns_original_insert_op() {
     let mut history = OperationHistory::new();
 
     history.push(Operation::Insert {
-        position: 0,
-        text: "hello".to_string(),
-    });
-
-    let op = history.undo();
-
-    assert!(op.is_some());
-    match op.unwrap() {
-        Operation::Delete { position, text } => {
-            assert_eq!(position, 0);
-            assert_eq!(text, "hello");
-        }
-        _ => panic!("Expected Delete operation"),
-    }
-}
-
-#[test]
-fn test_history_undo_delete_returns_insert_op() {
-    let mut history = OperationHistory::new();
-
-    history.push(Operation::Delete {
         position: 0,
         text: "hello".to_string(),
     });
@@ -131,6 +113,27 @@ fn test_history_undo_delete_returns_insert_op() {
             assert_eq!(text, "hello");
         }
         _ => panic!("Expected Insert operation"),
+    }
+}
+
+#[test]
+fn test_history_undo_delete_returns_original_delete_op() {
+    let mut history = OperationHistory::new();
+
+    history.push(Operation::Delete {
+        position: 0,
+        text: "hello".to_string(),
+    });
+
+    let op = history.undo();
+
+    assert!(op.is_some());
+    match op.unwrap() {
+        Operation::Delete { position, text } => {
+            assert_eq!(position, 0);
+            assert_eq!(text, "hello");
+        }
+        _ => panic!("Expected Delete operation"),
     }
 }
 
@@ -233,7 +236,8 @@ fn test_history_clear() {
     });
     history.undo();
 
-    assert!(history.can_undo());
+    // undo_stack is now empty (its one entry moved to redo_stack).
+    assert!(!history.can_undo());
     assert!(history.can_redo());
 
     history.clear();

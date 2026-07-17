@@ -73,15 +73,11 @@ impl KeyboardController {
 
         match code {
             KeyCode::KeyZ => {
-                if let Some(op) = editor.history_mut().undo() {
-                    apply_undo(editor, op);
-                }
+                editor.undo();
                 true
             }
             KeyCode::KeyY => {
-                if let Some(op) = editor.history_mut().redo() {
-                    apply_redo(editor, op);
-                }
+                editor.redo();
                 true
             }
             KeyCode::KeyS => true,
@@ -89,13 +85,7 @@ impl KeyboardController {
                 if let Some(sel) = editor.cursor().selection() {
                     if !sel.is_empty() {
                         let (s, e) = sel.range();
-                        let text = editor
-                            .buffer()
-                            .as_str()
-                            .chars()
-                            .skip(s)
-                            .take(e - s)
-                            .collect::<String>();
+                        let text = editor.buffer().slice_string(s, e);
                         let _ = clipboard.set_text(&text);
                     }
                 }
@@ -105,13 +95,7 @@ impl KeyboardController {
                 if let Some(sel) = editor.cursor().selection() {
                     if !sel.is_empty() {
                         let (s, e) = sel.range();
-                        let text = editor
-                            .buffer()
-                            .as_str()
-                            .chars()
-                            .skip(s)
-                            .take(e - s)
-                            .collect::<String>();
+                        let text = editor.buffer().slice_string(s, e);
                         let _ = clipboard.set_text(&text);
                         editor.buffer_mut().remove(s, e - s);
                         editor
@@ -124,31 +108,7 @@ impl KeyboardController {
             }
             KeyCode::KeyV => {
                 if let Ok(text) = clipboard.get_text() {
-                    if let Some(sel) = editor.cursor().selection() {
-                        if !sel.is_empty() {
-                            let (s, e) = sel.range();
-                            let txt = editor
-                                .buffer()
-                                .as_str()
-                                .chars()
-                                .skip(s)
-                                .take(e - s)
-                                .collect::<String>();
-                            editor.buffer_mut().remove(s, e - s);
-                            editor.history_mut().push(Operation::Delete {
-                                position: s,
-                                text: txt,
-                            });
-                            editor.cursor_mut().set_position(s);
-                        }
-                    }
-                    let pos = editor.cursor().position();
-                    editor.buffer_mut().insert(pos, &text);
-                    editor.cursor_mut().set_position(pos + text.len());
-                    editor.history_mut().push(Operation::Insert {
-                        position: pos,
-                        text,
-                    });
+                    editor.paste(text);
                 }
                 true
             }
@@ -158,14 +118,6 @@ impl KeyboardController {
                     editor.cursor_mut().set_selection_start(0);
                     editor.cursor_mut().set_selection_end(len);
                 }
-                true
-            }
-            KeyCode::KeyF => {
-                editor.set_find_query(Some(String::new()));
-                true
-            }
-            KeyCode::KeyH => {
-                editor.set_find_query(Some(String::new()));
                 true
             }
             KeyCode::KeyG => {
@@ -184,13 +136,7 @@ impl KeyboardController {
         if let Some(sel) = editor.cursor().selection() {
             if !sel.is_empty() {
                 let (s, e) = sel.range();
-                let txt = editor
-                    .buffer()
-                    .as_str()
-                    .chars()
-                    .skip(s)
-                    .take(e - s)
-                    .collect::<String>();
+                let txt = editor.buffer().slice_string(s, e);
                 editor.buffer_mut().remove(s, e - s);
                 editor.history_mut().push(Operation::Delete {
                     position: s,
@@ -398,13 +344,7 @@ impl KeyboardController {
         if let Some(sel) = editor.cursor().selection() {
             if !sel.is_empty() {
                 let (s, e) = sel.range();
-                let txt = editor
-                    .buffer()
-                    .as_str()
-                    .chars()
-                    .skip(s)
-                    .take(e - s)
-                    .collect::<String>();
+                let txt = editor.buffer().slice_string(s, e);
                 editor.buffer_mut().remove(s, e - s);
                 editor.cursor_mut().set_position(s);
                 editor.history_mut().push(Operation::Delete {
@@ -457,31 +397,5 @@ impl KeyboardController {
 impl Default for KeyboardController {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-fn apply_undo(editor: &mut EditorService, op: Operation) {
-    match op {
-        Operation::Insert { position, text } => {
-            editor.buffer_mut().remove(position, text.len());
-            editor.cursor_mut().set_position(position);
-        }
-        Operation::Delete { position, text } => {
-            editor.buffer_mut().insert(position, &text);
-            editor.cursor_mut().set_position(position + text.len());
-        }
-    }
-}
-
-fn apply_redo(editor: &mut EditorService, op: Operation) {
-    match op {
-        Operation::Insert { position, text } => {
-            editor.buffer_mut().insert(position, &text);
-            editor.cursor_mut().set_position(position + text.len());
-        }
-        Operation::Delete { position, text } => {
-            editor.buffer_mut().remove(position, text.len());
-            editor.cursor_mut().set_position(position);
-        }
     }
 }
