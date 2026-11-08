@@ -6,6 +6,7 @@ pub enum Operation {
     Delete { position: usize, text: String },
 }
 
+#[derive(Debug)]
 pub struct OperationHistory {
     undo_stack: VecDeque<Operation>,
     redo_stack: VecDeque<Operation>,

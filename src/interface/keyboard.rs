@@ -5,6 +5,68 @@ use crate::ports::clipboard_port::Clipboard;
 use winit::event::{ElementState, KeyEvent};
 use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
 
+/// Direction for cursor movement
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CursorDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+    WordLeft,
+    WordRight,
+    PageUp,
+    PageDown,
+    DocumentStart,
+    DocumentEnd,
+}
+
+/// Action returned by keyboard handler - decouples input handling from editor operations
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyAction {
+    /// No action to take
+    None,
+    /// Insert a single character
+    InsertChar(char),
+    /// Insert a string (e.g., tab as spaces)
+    InsertText(String),
+    /// Delete character before cursor
+    Backspace,
+    /// Delete character after cursor
+    Delete,
+    /// Move cursor in a direction, optionally extending selection
+    MoveCursor(CursorDirection, bool),
+    /// Select all text
+    SelectAll,
+    /// Copy selection to clipboard
+    Copy,
+    /// Cut selection to clipboard
+    Cut,
+    /// Paste from clipboard
+    Paste,
+    /// Undo last operation
+    Undo,
+    /// Redo last undone operation
+    Redo,
+    /// Insert newline
+    NewLine,
+    /// Insert tab (or spaces)
+    Tab,
+    /// Remove indentation
+    Unindent,
+    /// Clear selection
+    ClearSelection,
+    /// Open find modal (handled at app level)
+    OpenFind,
+    /// Open replace modal (handled at app level)
+    OpenReplace,
+    /// Find next match
+    FindNext,
+    /// Find previous match
+    FindPrev,
+}
+
 pub struct KeyboardController {
     modifiers: ModifiersState,
 }
@@ -20,6 +82,117 @@ impl KeyboardController {
         self.modifiers = modifiers;
     }
 
+    /// Handle a key event and return an action (decoupled from EditorService)
+    pub fn handle_key(&mut self, event: &KeyEvent) -> KeyAction {
+        if event.state != ElementState::Pressed {
+            return KeyAction::None;
+        }
+
+        let PhysicalKey::Code(code) = event.physical_key else {
+            return KeyAction::None;
+        };
+
+        let ctrl_or_cmd = self.modifiers.control_key() || self.modifiers.super_key();
+        let shift = self.modifiers.shift_key();
+
+        // Handle Ctrl/Cmd shortcuts
+        if ctrl_or_cmd {
+            return self.map_shortcut(code, shift);
+        }
+
+        // Handle special keys (arrows, backspace, etc.)
+        if Self::is_special_key(code) {
+            return self.map_special_key(code, shift);
+        }
+
+        // Handle text input
+        if let Some(ref text) = event.text {
+            let is_printable = !text.chars().any(|c| c.is_control());
+            if is_printable && !text.is_empty() {
+                if text.chars().count() == 1 {
+                    return KeyAction::InsertChar(text.chars().next().unwrap());
+                } else {
+                    return KeyAction::InsertText(text.to_string());
+                }
+            }
+        }
+
+        KeyAction::None
+    }
+
+    /// Map a Ctrl/Cmd shortcut to a KeyAction
+    fn map_shortcut(&self, code: KeyCode, shift: bool) -> KeyAction {
+        match code {
+            KeyCode::KeyZ => KeyAction::Undo,
+            KeyCode::KeyY => KeyAction::Redo,
+            KeyCode::KeyC => KeyAction::Copy,
+            KeyCode::KeyX => KeyAction::Cut,
+            KeyCode::KeyV => KeyAction::Paste,
+            KeyCode::KeyA => KeyAction::SelectAll,
+            KeyCode::KeyF => KeyAction::OpenFind,
+            KeyCode::KeyH => KeyAction::OpenReplace,
+            KeyCode::KeyG => {
+                if shift {
+                    KeyAction::FindPrev
+                } else {
+                    KeyAction::FindNext
+                }
+            }
+            KeyCode::ArrowLeft => {
+                if shift {
+                    KeyAction::MoveCursor(CursorDirection::WordLeft, true)
+                } else {
+                    KeyAction::MoveCursor(CursorDirection::WordLeft, false)
+                }
+            }
+            KeyCode::ArrowRight => {
+                if shift {
+                    KeyAction::MoveCursor(CursorDirection::WordRight, true)
+                } else {
+                    KeyAction::MoveCursor(CursorDirection::WordRight, false)
+                }
+            }
+            KeyCode::ArrowUp if shift => {
+                KeyAction::MoveCursor(CursorDirection::DocumentStart, true)
+            }
+            KeyCode::ArrowDown if shift => {
+                KeyAction::MoveCursor(CursorDirection::DocumentEnd, true)
+            }
+            KeyCode::Home => KeyAction::MoveCursor(CursorDirection::DocumentStart, shift),
+            KeyCode::End => KeyAction::MoveCursor(CursorDirection::DocumentEnd, shift),
+            _ => KeyAction::None,
+        }
+    }
+
+    /// Map a special key to a KeyAction
+    fn map_special_key(&self, code: KeyCode, shift: bool) -> KeyAction {
+        match code {
+            KeyCode::ArrowLeft => KeyAction::MoveCursor(CursorDirection::Left, shift),
+            KeyCode::ArrowRight => KeyAction::MoveCursor(CursorDirection::Right, shift),
+            KeyCode::ArrowUp => KeyAction::MoveCursor(CursorDirection::Up, shift),
+            KeyCode::ArrowDown => KeyAction::MoveCursor(CursorDirection::Down, shift),
+            KeyCode::Home => KeyAction::MoveCursor(CursorDirection::Home, shift),
+            KeyCode::End => KeyAction::MoveCursor(CursorDirection::End, shift),
+            KeyCode::PageUp => KeyAction::MoveCursor(CursorDirection::PageUp, shift),
+            KeyCode::PageDown => KeyAction::MoveCursor(CursorDirection::PageDown, shift),
+            KeyCode::Backspace => KeyAction::Backspace,
+            KeyCode::Delete => KeyAction::Delete,
+            KeyCode::Tab => {
+                if shift {
+                    KeyAction::Unindent
+                } else {
+                    KeyAction::Tab
+                }
+            }
+            KeyCode::Enter => KeyAction::NewLine,
+            KeyCode::Space => KeyAction::InsertChar(' '),
+            KeyCode::Escape => KeyAction::ClearSelection,
+            _ => KeyAction::None,
+        }
+    }
+
+    /// Legacy method - handle key event and apply directly to editor
+    /// Deprecated: Use handle_key() for decoupled action handling
     pub fn handle_key_event(&mut self, editor: &mut EditorService, event: KeyEvent) -> bool {
         if event.state != ElementState::Pressed {
             return false;

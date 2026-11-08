@@ -16,9 +16,28 @@ use interface::App;
 use menu::MenuHandler;
 use winit::event_loop::EventLoop;
 
+#[cfg(target_os = "macos")]
+use winit::platform::macos::EventLoopBuilderExtMacOS;
+
 fn main() {
     env_logger::init();
 
+    // Build event loop with macOS-specific settings
+    #[cfg(target_os = "macos")]
+    let event_loop = {
+        match EventLoop::<menu::MenuAction>::with_user_event()
+            .with_default_menu(false) // We use our own menu
+            .build()
+        {
+            Ok(el) => el,
+            Err(e) => {
+                eprintln!("Failed to create event loop: {}", e);
+                std::process::exit(1);
+            }
+        }
+    };
+
+    #[cfg(not(target_os = "macos"))]
     let event_loop = match EventLoop::<menu::MenuAction>::with_user_event().build() {
         Ok(el) => el,
         Err(e) => {

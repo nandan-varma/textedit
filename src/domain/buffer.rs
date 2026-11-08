@@ -1,5 +1,6 @@
 use ropey::{Rope, RopeSlice};
 
+#[derive(Debug)]
 pub struct Buffer {
     content: Rope,
 }

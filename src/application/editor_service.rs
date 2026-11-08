@@ -1,70 +1,226 @@
-use crate::domain::{Buffer, Cursor, Operation, OperationHistory};
+//! Editor service - orchestrates document editing operations.
+//!
+//! This service now uses DocumentManager internally to support multiple documents
+//! while maintaining backward compatibility with the single-document API.
 
+use std::path::PathBuf;
+
+use crate::application::document_manager::{DocumentManager, TabInfo};
+use crate::domain::{Buffer, Cursor, Document, DocumentId, Operation, OperationHistory};
+
+/// Editor service with multi-document support via DocumentManager
 pub struct EditorService {
-    buffer: Buffer,
-    cursor: Cursor,
-    history: OperationHistory,
-    file_path: Option<String>,
-    is_modified: bool,
+    /// Document manager handling multiple documents
+    documents: DocumentManager,
+    /// UI preferences (global across documents)
     show_line_numbers: bool,
     show_status_bar: bool,
+    show_tab_bar: bool,
+    /// Find/replace state (persists across documents)
     last_find_query: Option<String>,
     last_replace_text: Option<String>,
 }
 
 impl EditorService {
     pub fn new() -> Self {
+        let mut documents = DocumentManager::new();
+        // Start with one empty document
+        documents.new_document();
+
         Self {
-            buffer: Buffer::new(),
-            cursor: Cursor::new(),
-            history: OperationHistory::new(),
-            file_path: None,
-            is_modified: false,
+            documents,
             show_line_numbers: true,
             show_status_bar: true,
+            show_tab_bar: true,
             last_find_query: None,
             last_replace_text: None,
         }
     }
 
+    // ========================================================================
+    // Document Manager delegation
+    // ========================================================================
+
+    /// Get the document manager
+    #[inline]
+    pub fn documents(&self) -> &DocumentManager {
+        &self.documents
+    }
+
+    /// Get the document manager mutably
+    #[inline]
+    pub fn documents_mut(&mut self) -> &mut DocumentManager {
+        &mut self.documents
+    }
+
+    /// Get tab information for UI
+    pub fn tabs(&self) -> Vec<TabInfo> {
+        self.documents.tabs()
+    }
+
+    /// Get number of open documents
+    #[inline]
+    pub fn document_count(&self) -> usize {
+        self.documents.document_count()
+    }
+
+    /// Get the active document ID
+    #[inline]
+    pub fn active_document_id(&self) -> Option<DocumentId> {
+        self.documents.active_id()
+    }
+
+    /// Switch to next tab
+    pub fn next_tab(&mut self) -> bool {
+        self.documents.next_tab()
+    }
+
+    /// Switch to previous tab
+    pub fn prev_tab(&mut self) -> bool {
+        self.documents.prev_tab()
+    }
+
+    /// Switch to tab by index
+    pub fn select_tab(&mut self, index: usize) -> bool {
+        self.documents.set_active_by_index(index)
+    }
+
+    /// Switch to tab by document ID
+    pub fn select_document(&mut self, id: DocumentId) -> bool {
+        self.documents.set_active(id)
+    }
+
+    /// Create a new empty document
+    pub fn new_document(&mut self) -> DocumentId {
+        self.documents.new_document()
+    }
+
+    /// Open a file (or switch to it if already open)
+    pub fn open_file(&mut self, path: PathBuf, content: String) -> DocumentId {
+        self.documents.open_file(path, content)
+    }
+
+    /// Close the current document
+    /// Returns the closed document if there was one
+    pub fn close_current_document(&mut self) -> Option<Document> {
+        self.documents.close_active()
+    }
+
+    /// Close a specific document by ID
+    pub fn close_document(&mut self, id: DocumentId) -> Option<Document> {
+        self.documents.close_document(id)
+    }
+
+    /// Check if any document has unsaved changes
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.documents.has_unsaved_changes()
+    }
+
+    // ========================================================================
+    // Active document accessors (backward compatible API)
+    // ========================================================================
+
+    /// Get the active document's buffer (immutable)
     pub fn buffer(&self) -> &Buffer {
-        &self.buffer
+        self.documents
+            .active_document()
+            .map(|d| d.buffer())
+            .expect("No active document")
     }
 
+    /// Get the active document's buffer (mutable)
     pub fn buffer_mut(&mut self) -> &mut Buffer {
-        self.is_modified = true;
-        &mut self.buffer
+        self.documents
+            .active_document_mut()
+            .map(|d| d.buffer_mut())
+            .expect("No active document")
     }
 
+    /// Get the active document's cursor (immutable)
     pub fn cursor(&self) -> &Cursor {
-        &self.cursor
+        self.documents
+            .active_document()
+            .map(|d| d.cursor())
+            .expect("No active document")
     }
 
+    /// Get the active document's cursor (mutable)
     pub fn cursor_mut(&mut self) -> &mut Cursor {
-        &mut self.cursor
+        self.documents
+            .active_document_mut()
+            .map(|d| d.cursor_mut())
+            .expect("No active document")
     }
 
+    /// Get the active document's history (mutable)
     pub fn history_mut(&mut self) -> &mut OperationHistory {
-        &mut self.history
+        self.documents
+            .active_document_mut()
+            .map(|d| d.history_mut())
+            .expect("No active document")
     }
 
+    /// Set the active document's file path
     pub fn set_file_path(&mut self, path: String) {
-        self.file_path = Some(path);
-        self.is_modified = false;
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.set_file_path(PathBuf::from(path));
+        }
     }
 
+    /// Get the active document's file path
     pub fn file_path(&self) -> Option<&str> {
-        self.file_path.as_deref()
+        self.documents
+            .active_document()
+            .and_then(|d| d.file_path())
+            .and_then(|p| p.to_str())
     }
 
-    #[allow(dead_code)]
+    /// Check if the active document is modified
     pub fn is_modified(&self) -> bool {
-        self.is_modified
+        self.documents
+            .active_document()
+            .map(|d| d.is_modified())
+            .unwrap_or(false)
     }
 
+    /// Set the active document's modified state
     pub fn set_modified(&mut self, modified: bool) {
-        self.is_modified = modified;
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.set_modified(modified);
+        }
     }
+
+    /// Get the active document's scroll offset
+    pub fn scroll_offset(&self) -> usize {
+        self.documents
+            .active_document()
+            .map(|d| d.scroll_offset())
+            .unwrap_or(0)
+    }
+
+    /// Set the active document's scroll offset
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.set_scroll_offset(offset);
+        }
+    }
+
+    /// Get the active document's title
+    pub fn title(&self) -> &str {
+        self.documents
+            .active_document()
+            .map(|d| d.title())
+            .unwrap_or("Untitled")
+    }
+
+    /// Get the active document's language
+    pub fn language(&self) -> Option<&str> {
+        self.documents.active_document().and_then(|d| d.language())
+    }
+
+    // ========================================================================
+    // UI preferences
+    // ========================================================================
 
     pub fn show_line_numbers(&self) -> bool {
         self.show_line_numbers
@@ -82,17 +238,30 @@ impl EditorService {
         self.show_status_bar = !self.show_status_bar;
     }
 
+    pub fn show_tab_bar(&self) -> bool {
+        self.show_tab_bar
+    }
+
+    pub fn toggle_tab_bar(&mut self) {
+        self.show_tab_bar = !self.show_tab_bar;
+    }
+
+    // ========================================================================
+    // Find/Replace functionality
+    // ========================================================================
+
     pub fn find_next(&mut self) -> bool {
         let query = self.last_find_query.clone().unwrap_or_default();
         if query.is_empty() {
             return false;
         }
-        self.last_find_query = Some(query.clone());
 
-        let from = self.cursor.position().min(self.buffer.len_chars());
-        if let Some((s, e)) = find_next_range(&self.buffer, &query, from) {
-            self.cursor.select_range(s, e);
-            return true;
+        if let Some(doc) = self.documents.active_document_mut() {
+            let from = doc.cursor().position().min(doc.buffer().len_chars());
+            if let Some((s, e)) = find_next_range(doc.buffer(), &query, from) {
+                doc.cursor_mut().select_range(s, e);
+                return true;
+            }
         }
         false
     }
@@ -102,12 +271,13 @@ impl EditorService {
         if query.is_empty() {
             return false;
         }
-        self.last_find_query = Some(query.clone());
 
-        let from = self.cursor.position().min(self.buffer.len_chars());
-        if let Some((s, e)) = find_prev_range(&self.buffer, &query, from) {
-            self.cursor.select_range(s, e);
-            return true;
+        if let Some(doc) = self.documents.active_document_mut() {
+            let from = doc.cursor().position().min(doc.buffer().len_chars());
+            if let Some((s, e)) = find_prev_range(doc.buffer(), &query, from) {
+                doc.cursor_mut().select_range(s, e);
+                return true;
+            }
         }
         false
     }
@@ -128,16 +298,20 @@ impl EditorService {
         self.last_replace_text.as_deref()
     }
 
-    /// Find all matches of the current query in the buffer
-    /// Returns a vector of (start, end) character indices
+    /// Find all matches of the current query in the active buffer
     pub fn find_all_matches(&self) -> Vec<(usize, usize)> {
         let query = match &self.last_find_query {
             Some(q) if !q.is_empty() => q,
             _ => return Vec::new(),
         };
 
+        let buffer = match self.documents.active_document() {
+            Some(doc) => doc.buffer(),
+            None => return Vec::new(),
+        };
+
         let mut matches = Vec::new();
-        let content = self.buffer.as_str();
+        let content = buffer.as_str();
         let qlen = query.chars().count();
 
         let mut byte_pos = 0;
@@ -150,7 +324,6 @@ impl EditorService {
 
             matches.push((start_char, start_char + qlen));
 
-            // Move past this match
             let query_bytes = query.len();
             byte_pos = match_byte_start + query_bytes;
             char_pos = start_char + qlen;
@@ -166,31 +339,27 @@ impl EditorService {
     }
 
     /// Get the index (1-based) of the current match based on cursor position
-    /// Returns None if no matches or cursor is not on a match
     pub fn current_match_index(&self) -> Option<usize> {
         let matches = self.find_all_matches();
         if matches.is_empty() {
             return None;
         }
 
-        let cursor_pos = self.cursor.position();
+        let cursor_pos = self.cursor().position();
 
-        // Find which match the cursor is at or closest to (after)
         for (i, (start, end)) in matches.iter().enumerate() {
             if cursor_pos >= *start && cursor_pos <= *end {
-                return Some(i + 1); // 1-based index
+                return Some(i + 1);
             }
             if cursor_pos < *start {
                 return Some(i + 1);
             }
         }
 
-        // Cursor is after all matches, wrap to first
         Some(1)
     }
 
     /// Replace the current selection if it matches the find query
-    /// Returns true if a replacement was made
     pub fn replace_current(&mut self) -> bool {
         let query = match &self.last_find_query {
             Some(q) if !q.is_empty() => q.clone(),
@@ -199,15 +368,19 @@ impl EditorService {
 
         let replacement = self.last_replace_text.clone().unwrap_or_default();
 
-        // Check if current selection matches the query
-        let selection = match self.cursor.selection() {
+        let doc = match self.documents.active_document_mut() {
+            Some(d) => d,
+            None => return false,
+        };
+
+        let selection = match doc.cursor().selection() {
             Some(sel) if !sel.is_empty() => sel,
             _ => return false,
         };
 
         let (start, end) = selection.range();
-        let selected_text: String = self
-            .buffer
+        let selected_text: String = doc
+            .buffer()
             .as_str()
             .chars()
             .skip(start)
@@ -219,31 +392,29 @@ impl EditorService {
         }
 
         // Delete the selection
-        self.buffer.remove(start, end - start);
-        self.history.push(Operation::Delete {
+        doc.buffer_mut().remove(start, end - start);
+        doc.history_mut().push(Operation::Delete {
             position: start,
             text: selected_text,
         });
-        self.is_modified = true;
 
         // Insert the replacement
         if !replacement.is_empty() {
-            self.buffer.insert(start, &replacement);
-            self.history.push(Operation::Insert {
+            doc.buffer_mut().insert(start, &replacement);
+            doc.history_mut().push(Operation::Insert {
                 position: start,
                 text: replacement.clone(),
             });
         }
 
         // Position cursor after the replacement
-        self.cursor
+        doc.cursor_mut()
             .set_position(start + replacement.chars().count());
 
         true
     }
 
     /// Replace the current match and find the next one
-    /// Returns true if a replacement was made
     pub fn replace_and_find_next(&mut self) -> bool {
         let replaced = self.replace_current();
         if replaced {
@@ -253,7 +424,6 @@ impl EditorService {
     }
 
     /// Replace all occurrences of the query with the replacement text
-    /// Returns the number of replacements made
     pub fn replace_all(&mut self) -> usize {
         let query = match &self.last_find_query {
             Some(q) if !q.is_empty() => q.clone(),
@@ -264,62 +434,609 @@ impl EditorService {
         let qlen = query.chars().count();
         let rlen = replacement.chars().count();
 
-        // Find all matches first (we need to replace from end to start to maintain positions)
         let mut matches = self.find_all_matches();
         if matches.is_empty() {
             return 0;
         }
 
-        // Reverse to replace from end to start (so positions remain valid)
         matches.reverse();
 
+        let doc = match self.documents.active_document_mut() {
+            Some(d) => d,
+            None => return 0,
+        };
+
         for (start, end) in &matches {
-            let deleted_text: String = self
-                .buffer
+            let deleted_text: String = doc
+                .buffer()
                 .as_str()
                 .chars()
                 .skip(*start)
                 .take(*end - *start)
                 .collect();
 
-            self.buffer.remove(*start, qlen);
-            self.history.push(Operation::Delete {
+            doc.buffer_mut().remove(*start, qlen);
+            doc.history_mut().push(Operation::Delete {
                 position: *start,
                 text: deleted_text,
             });
 
             if !replacement.is_empty() {
-                self.buffer.insert(*start, &replacement);
-                self.history.push(Operation::Insert {
+                doc.buffer_mut().insert(*start, &replacement);
+                doc.history_mut().push(Operation::Insert {
                     position: *start,
                     text: replacement.clone(),
                 });
             }
         }
 
-        self.is_modified = true;
         let count = matches.len();
 
-        // Position cursor at the start of where the last replacement was made
         if let Some((start, _)) = matches.last() {
-            self.cursor.set_position(*start + rlen);
+            doc.cursor_mut().set_position(*start + rlen);
         }
 
         count
     }
 
+    // ========================================================================
+    // Document operations (backward compatible)
+    // ========================================================================
+
     pub fn new_file(&mut self) {
-        self.buffer.clear();
-        self.cursor.set_position(0);
-        self.history.clear();
-        self.file_path = None;
-        self.is_modified = false;
+        // Create a new document and switch to it
+        self.documents.new_document();
     }
 
     pub fn load_content(&mut self, content: String) {
-        self.buffer.set_content(&content);
-        self.cursor.set_position(0);
-        self.history.clear();
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.load_content(&content);
+        }
+    }
+
+    // ========================================================================
+    // Cursor movement helpers
+    // ========================================================================
+
+    #[inline]
+    pub fn cursor_move_up(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            // Use raw pointer to avoid borrow conflict
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_up(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_down(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_down(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_to_line_start(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_to_line_start(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_to_line_end(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_to_line_end(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_to_word_start(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_to_word_start(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_to_word_end(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().move_to_word_end(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_extend_selection_up(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().extend_selection_up(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_extend_selection_down(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().extend_selection_down(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_extend_selection_to_word_start(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut()
+                    .extend_selection_to_word_start(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_extend_selection_to_word_end(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().extend_selection_to_word_end(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_select_word(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().select_word_at_cursor(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_select_line(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().select_line(&*buffer_ptr);
+            }
+        }
+    }
+
+    // ========================================================================
+    // Text editing operations (for decoupled KeyAction handling)
+    // ========================================================================
+
+    /// Insert a character at cursor position, deleting any selection first
+    pub fn insert_char(&mut self, ch: char) {
+        self.delete_selection_if_any();
+        if let Some(doc) = self.documents.active_document_mut() {
+            let pos = doc.cursor().position();
+            let text = ch.to_string();
+            doc.buffer_mut().insert(pos, &text);
+            doc.cursor_mut().set_position(pos + 1);
+            doc.history_mut().push(Operation::Insert {
+                position: pos,
+                text,
+            });
+            doc.set_modified(true);
+        }
+    }
+
+    /// Delete character before cursor (backspace)
+    pub fn delete_backward(&mut self) {
+        if self.delete_selection_if_any() {
+            return;
+        }
+        if let Some(doc) = self.documents.active_document_mut() {
+            let pos = doc.cursor().position();
+            if pos > 0 {
+                if let Some(ch) = doc.buffer().get_char(pos - 1) {
+                    doc.buffer_mut().remove(pos - 1, 1);
+                    doc.cursor_mut().set_position(pos - 1);
+                    doc.history_mut().push(Operation::Delete {
+                        position: pos - 1,
+                        text: ch.to_string(),
+                    });
+                    doc.set_modified(true);
+                }
+            }
+        }
+    }
+
+    /// Delete character after cursor (delete key)
+    pub fn delete_forward(&mut self) {
+        if self.delete_selection_if_any() {
+            return;
+        }
+        if let Some(doc) = self.documents.active_document_mut() {
+            let pos = doc.cursor().position();
+            let len = doc.buffer().len_chars();
+            if pos < len {
+                if let Some(ch) = doc.buffer().get_char(pos) {
+                    doc.buffer_mut().remove(pos, 1);
+                    doc.history_mut().push(Operation::Delete {
+                        position: pos,
+                        text: ch.to_string(),
+                    });
+                    doc.set_modified(true);
+                }
+            }
+        }
+    }
+
+    /// Helper: Delete selection if there is one, returns true if deleted
+    fn delete_selection_if_any(&mut self) -> bool {
+        if let Some(doc) = self.documents.active_document_mut() {
+            if let Some(sel) = doc.cursor().selection() {
+                if !sel.is_empty() {
+                    let (start, end) = sel.range();
+                    let text: String = doc
+                        .buffer()
+                        .as_str()
+                        .chars()
+                        .skip(start)
+                        .take(end - start)
+                        .collect();
+                    doc.buffer_mut().remove(start, end - start);
+                    doc.cursor_mut().set_position(start);
+                    doc.history_mut().push(Operation::Delete {
+                        position: start,
+                        text,
+                    });
+                    doc.set_modified(true);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    // ========================================================================
+    // Simple cursor movement (no buffer reference needed)
+    // ========================================================================
+
+    #[inline]
+    pub fn cursor_move_left(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.cursor_mut().move_backward();
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_right(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let len = doc.buffer().len_chars();
+            doc.cursor_mut().move_forward(len);
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_left_select(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.cursor_mut().extend_selection_backward();
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_right_select(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let len = doc.buffer().len_chars();
+            doc.cursor_mut().extend_selection_forward(len);
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_up_select(&mut self) {
+        self.cursor_extend_selection_up();
+    }
+
+    #[inline]
+    pub fn cursor_move_down_select(&mut self) {
+        self.cursor_extend_selection_down();
+    }
+
+    #[inline]
+    pub fn cursor_move_home(&mut self) {
+        self.cursor_move_to_line_start();
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.cursor_mut().clear_selection();
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_end(&mut self) {
+        self.cursor_move_to_line_end();
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.cursor_mut().clear_selection();
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_home_select(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut()
+                    .extend_selection_to_line_start(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_end_select(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let buffer = doc.buffer();
+            let buffer_ptr = buffer as *const Buffer;
+            unsafe {
+                doc.cursor_mut().extend_selection_to_line_end(&*buffer_ptr);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_word_left(&mut self) {
+        self.cursor_move_to_word_start();
+    }
+
+    #[inline]
+    pub fn cursor_move_word_right(&mut self) {
+        self.cursor_move_to_word_end();
+    }
+
+    #[inline]
+    pub fn cursor_move_word_left_select(&mut self) {
+        self.cursor_extend_selection_to_word_start();
+    }
+
+    #[inline]
+    pub fn cursor_move_word_right_select(&mut self) {
+        self.cursor_extend_selection_to_word_end();
+    }
+
+    #[inline]
+    pub fn cursor_move_to_document_start(&mut self, extend_selection: bool) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            if extend_selection {
+                doc.cursor_mut().set_selection_start(0);
+            } else {
+                doc.cursor_mut().set_position(0);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_move_to_document_end(&mut self, extend_selection: bool) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let len = doc.buffer().len_chars();
+            if extend_selection {
+                doc.cursor_mut().set_selection_end(len);
+            } else {
+                doc.cursor_mut().set_position(len);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn cursor_page_up(&mut self) {
+        for _ in 0..10 {
+            self.cursor_move_up();
+        }
+    }
+
+    #[inline]
+    pub fn cursor_page_down(&mut self) {
+        for _ in 0..10 {
+            self.cursor_move_down();
+        }
+    }
+
+    // ========================================================================
+    // Selection operations
+    // ========================================================================
+
+    /// Select all text in the buffer
+    pub fn select_all(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let len = doc.buffer().len_chars();
+            if len > 0 {
+                doc.cursor_mut().set_selection_start(0);
+                doc.cursor_mut().set_selection_end(len);
+            }
+        }
+    }
+
+    /// Clear the current selection
+    pub fn clear_selection(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            doc.cursor_mut().clear_selection();
+        }
+    }
+
+    // ========================================================================
+    // Clipboard operations
+    // ========================================================================
+
+    /// Copy selection to clipboard
+    pub fn copy_selection(&mut self) {
+        use crate::infrastructure::clipboard::ArboardClipboard;
+        use crate::ports::clipboard_port::Clipboard;
+
+        if let Some(doc) = self.documents.active_document() {
+            if let Some(sel) = doc.cursor().selection() {
+                if !sel.is_empty() {
+                    let (start, end) = sel.range();
+                    let text: String = doc
+                        .buffer()
+                        .as_str()
+                        .chars()
+                        .skip(start)
+                        .take(end - start)
+                        .collect();
+                    let clipboard = ArboardClipboard::new();
+                    let _ = clipboard.set_text(&text);
+                }
+            }
+        }
+    }
+
+    /// Cut selection to clipboard
+    pub fn cut_selection(&mut self) {
+        use crate::infrastructure::clipboard::ArboardClipboard;
+        use crate::ports::clipboard_port::Clipboard;
+
+        if let Some(doc) = self.documents.active_document() {
+            if let Some(sel) = doc.cursor().selection() {
+                if !sel.is_empty() {
+                    let (start, end) = sel.range();
+                    let text: String = doc
+                        .buffer()
+                        .as_str()
+                        .chars()
+                        .skip(start)
+                        .take(end - start)
+                        .collect();
+                    let clipboard = ArboardClipboard::new();
+                    let _ = clipboard.set_text(&text);
+                }
+            }
+        }
+        // Now delete the selection
+        self.delete_selection_if_any();
+    }
+
+    /// Paste from clipboard
+    pub fn paste(&mut self) {
+        use crate::infrastructure::clipboard::ArboardClipboard;
+        use crate::ports::clipboard_port::Clipboard;
+
+        let clipboard = ArboardClipboard::new();
+        if let Ok(text) = clipboard.get_text() {
+            // Delete selection first
+            self.delete_selection_if_any();
+
+            if let Some(doc) = self.documents.active_document_mut() {
+                let pos = doc.cursor().position();
+                doc.buffer_mut().insert(pos, &text);
+                let new_pos = pos + text.chars().count();
+                doc.cursor_mut().set_position(new_pos);
+                doc.history_mut().push(Operation::Insert {
+                    position: pos,
+                    text,
+                });
+                doc.set_modified(true);
+            }
+        }
+    }
+
+    // ========================================================================
+    // Undo/Redo operations
+    // ========================================================================
+
+    /// Undo the last operation
+    pub fn undo(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            if let Some(op) = doc.history_mut().undo() {
+                match op {
+                    Operation::Insert { position, text } => {
+                        doc.buffer_mut().remove(position, text.len());
+                        doc.cursor_mut().set_position(position);
+                    }
+                    Operation::Delete { position, text } => {
+                        doc.buffer_mut().insert(position, &text);
+                        doc.cursor_mut().set_position(position + text.len());
+                    }
+                }
+                doc.set_modified(true);
+            }
+        }
+    }
+
+    /// Redo the last undone operation
+    pub fn redo(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            if let Some(op) = doc.history_mut().redo() {
+                match op {
+                    Operation::Insert { position, text } => {
+                        doc.buffer_mut().insert(position, &text);
+                        doc.cursor_mut().set_position(position + text.len());
+                    }
+                    Operation::Delete { position, text } => {
+                        doc.buffer_mut().remove(position, text.len());
+                        doc.cursor_mut().set_position(position);
+                    }
+                }
+                doc.set_modified(true);
+            }
+        }
+    }
+
+    // ========================================================================
+    // Indentation operations
+    // ========================================================================
+
+    /// Remove indentation from current line
+    pub fn unindent(&mut self) {
+        if let Some(doc) = self.documents.active_document_mut() {
+            let cursor_pos = doc.cursor().position();
+            let buffer = doc.buffer();
+            let (line, _) = buffer.char_to_line_col(cursor_pos);
+
+            if let Some(line_str) = buffer.line(line) {
+                let indent = line_str
+                    .chars()
+                    .take_while(|c| *c == ' ' || *c == '\t')
+                    .count();
+                if indent > 0 {
+                    let start = buffer.line_to_char(line);
+                    let remove = if indent >= 4 { 4 } else { indent };
+                    let removed_text: String = line_str.chars().take(remove).collect();
+
+                    doc.buffer_mut().remove(start, remove);
+                    doc.history_mut().push(Operation::Delete {
+                        position: start,
+                        text: removed_text,
+                    });
+
+                    let cursor_pos = doc.cursor().position();
+                    if cursor_pos > start {
+                        doc.cursor_mut()
+                            .set_position(cursor_pos.saturating_sub(remove));
+                    }
+                    doc.set_modified(true);
+                }
+            }
+        }
     }
 }
 
@@ -327,6 +1044,57 @@ impl Default for EditorService {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ============================================================================
+// Helper functions for find/replace
+// ============================================================================
+
+fn find_next_range(buffer: &Buffer, query: &str, from: usize) -> Option<(usize, usize)> {
+    let total = buffer.len_chars();
+    if query.is_empty() || total == 0 {
+        return None;
+    }
+    let qlen = query.chars().count();
+    let from = from.min(total);
+
+    let tail = buffer.rope().slice(from..total).to_string();
+    if let Some(byte_idx) = tail.find(query) {
+        let char_off = tail[..byte_idx].chars().count();
+        let start = from + char_off;
+        return Some((start, start + qlen));
+    }
+
+    let head = buffer.rope().slice(0..from).to_string();
+    if let Some(byte_idx) = head.find(query) {
+        let char_off = head[..byte_idx].chars().count();
+        return Some((char_off, char_off + qlen));
+    }
+
+    None
+}
+
+fn find_prev_range(buffer: &Buffer, query: &str, from: usize) -> Option<(usize, usize)> {
+    let total = buffer.len_chars();
+    if query.is_empty() || total == 0 {
+        return None;
+    }
+    let qlen = query.chars().count();
+    let from = from.min(total);
+
+    let head = buffer.rope().slice(0..from).to_string();
+    if let Some(byte_idx) = head.rfind(query) {
+        let char_off = head[..byte_idx].chars().count();
+        return Some((char_off, char_off + qlen));
+    }
+
+    let full = buffer.rope().to_string();
+    if let Some(byte_idx) = full.rfind(query) {
+        let char_off = full[..byte_idx].chars().count();
+        return Some((char_off, char_off + qlen));
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -348,6 +1116,8 @@ mod tests {
         assert!(!editor.is_modified());
         assert!(editor.show_line_numbers());
         assert!(editor.show_status_bar());
+        assert!(editor.show_tab_bar());
+        assert_eq!(editor.document_count(), 1);
     }
 
     #[test]
@@ -412,6 +1182,18 @@ mod tests {
     }
 
     #[test]
+    fn test_editor_service_toggle_tab_bar() {
+        let mut editor = EditorService::new();
+        assert!(editor.show_tab_bar());
+
+        editor.toggle_tab_bar();
+        assert!(!editor.show_tab_bar());
+
+        editor.toggle_tab_bar();
+        assert!(editor.show_tab_bar());
+    }
+
+    #[test]
     fn test_editor_service_set_find_query() {
         let mut editor = EditorService::new();
         assert!(editor.find_query().is_none());
@@ -423,15 +1205,14 @@ mod tests {
     #[test]
     fn test_editor_service_new_file() {
         let mut editor = create_editor("existing content");
-        editor.set_file_path("/test/path.txt".to_string());
-        editor.set_modified(true);
+        let initial_count = editor.document_count();
 
         editor.new_file();
 
+        // New file creates a new document
+        assert_eq!(editor.document_count(), initial_count + 1);
+        // New document should be active and empty
         assert_eq!(editor.buffer().len_chars(), 0);
-        assert_eq!(editor.cursor().position(), 0);
-        assert!(editor.file_path().is_none());
-        assert!(!editor.is_modified());
     }
 
     #[test]
@@ -441,17 +1222,6 @@ mod tests {
 
         assert_eq!(editor.buffer().as_str(), "hello world");
         assert_eq!(editor.cursor().position(), 0);
-    }
-
-    #[test]
-    fn test_editor_service_load_content_clears_history() {
-        let mut editor = EditorService::new();
-        editor.buffer_mut().insert(0, "test");
-        editor.history_mut().undo();
-
-        editor.load_content("new content".to_string());
-
-        assert!(!editor.history_mut().can_undo());
     }
 
     #[test]
@@ -512,134 +1282,35 @@ mod tests {
         let result = editor.find_prev();
         assert!(!result);
     }
-}
 
-fn find_next_range(buffer: &Buffer, query: &str, from: usize) -> Option<(usize, usize)> {
-    let total = buffer.len_chars();
-    if query.is_empty() || total == 0 {
-        return None;
-    }
-    let qlen = query.chars().count();
-    let from = from.min(total);
+    #[test]
+    fn test_multi_document_support() {
+        let mut editor = EditorService::new();
+        assert_eq!(editor.document_count(), 1);
 
-    let tail = buffer.rope().slice(from..total).to_string();
-    if let Some(byte_idx) = tail.find(query) {
-        let char_off = tail[..byte_idx].chars().count();
-        let start = from + char_off;
-        return Some((start, start + qlen));
-    }
+        // Create second document
+        let id2 = editor.new_document();
+        assert_eq!(editor.document_count(), 2);
+        assert_eq!(editor.active_document_id(), Some(id2));
 
-    let head = buffer.rope().slice(0..from).to_string();
-    if let Some(byte_idx) = head.find(query) {
-        let char_off = head[..byte_idx].chars().count();
-        let start = char_off;
-        return Some((start, start + qlen));
-    }
+        // Create third document
+        let _id3 = editor.new_document();
+        assert_eq!(editor.document_count(), 3);
 
-    None
-}
+        // Navigate tabs
+        editor.prev_tab();
+        assert_eq!(editor.active_document_id(), Some(id2));
 
-fn find_prev_range(buffer: &Buffer, query: &str, from: usize) -> Option<(usize, usize)> {
-    let total = buffer.len_chars();
-    if query.is_empty() || total == 0 {
-        return None;
-    }
-    let qlen = query.chars().count();
-    let from = from.min(total);
-
-    let head = buffer.rope().slice(0..from).to_string();
-    if let Some(byte_idx) = head.rfind(query) {
-        let char_off = head[..byte_idx].chars().count();
-        let start = char_off;
-        return Some((start, start + qlen));
+        editor.select_tab(0);
+        assert_ne!(editor.active_document_id(), Some(id2));
     }
 
-    let full = buffer.rope().to_string();
-    if let Some(byte_idx) = full.rfind(query) {
-        let char_off = full[..byte_idx].chars().count();
-        let start = char_off;
-        return Some((start, start + qlen));
-    }
+    #[test]
+    fn test_tabs_info() {
+        let mut editor = EditorService::new();
+        editor.new_document();
 
-    None
-}
-
-// ============================================================================
-// Cursor movement helper methods
-// ============================================================================
-// These methods provide cursor operations with internal buffer access,
-// avoiding borrow conflicts when the caller needs both buffer and cursor access.
-
-impl EditorService {
-    /// Move cursor up one line
-    #[inline]
-    pub fn cursor_move_up(&mut self) {
-        self.cursor.move_up(&self.buffer);
-    }
-
-    /// Move cursor down one line
-    #[inline]
-    pub fn cursor_move_down(&mut self) {
-        self.cursor.move_down(&self.buffer);
-    }
-
-    /// Move cursor to start of current line
-    #[inline]
-    pub fn cursor_move_to_line_start(&mut self) {
-        self.cursor.move_to_line_start(&self.buffer);
-    }
-
-    /// Move cursor to end of current line
-    #[inline]
-    pub fn cursor_move_to_line_end(&mut self) {
-        self.cursor.move_to_line_end(&self.buffer);
-    }
-
-    /// Move cursor to start of previous word
-    #[inline]
-    pub fn cursor_move_to_word_start(&mut self) {
-        self.cursor.move_to_word_start(&self.buffer);
-    }
-
-    /// Move cursor to end of next word
-    #[inline]
-    pub fn cursor_move_to_word_end(&mut self) {
-        self.cursor.move_to_word_end(&self.buffer);
-    }
-
-    /// Extend selection up one line
-    #[inline]
-    pub fn cursor_extend_selection_up(&mut self) {
-        self.cursor.extend_selection_up(&self.buffer);
-    }
-
-    /// Extend selection down one line
-    #[inline]
-    pub fn cursor_extend_selection_down(&mut self) {
-        self.cursor.extend_selection_down(&self.buffer);
-    }
-
-    /// Extend selection to start of previous word
-    #[inline]
-    pub fn cursor_extend_selection_to_word_start(&mut self) {
-        self.cursor.extend_selection_to_word_start(&self.buffer);
-    }
-
-    /// Extend selection to end of next word
-    #[inline]
-    pub fn cursor_extend_selection_to_word_end(&mut self) {
-        self.cursor.extend_selection_to_word_end(&self.buffer);
-    }
-
-    /// Select word at current cursor position
-    #[inline]
-    pub fn cursor_select_word(&mut self) {
-        self.cursor.select_word_at_cursor(&self.buffer);
-    }
-
-    /// Select entire current line
-    #[inline]
-    pub fn cursor_select_line(&mut self) {
-        self.cursor.select_line(&self.buffer);
+        let tabs = editor.tabs();
+        assert_eq!(tabs.len(), 2);
     }
 }

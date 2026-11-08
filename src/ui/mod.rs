@@ -4,10 +4,12 @@ pub mod layers;
 pub mod layout;
 pub mod modal;
 pub mod primitives;
+pub mod tabs;
 pub mod widget;
 pub mod widgets;
 
 pub use event_router::EventRouter;
 pub use layers::{Layer, LayerId, LayerManager};
 pub use primitives::{Color, Point, Primitive, Rect, RenderList};
+pub use tabs::{TabBar, TabBarAction};
 pub use widget::{EventContext, RenderContext, Widget, WidgetAction, WidgetContainer, WidgetEvent};

@@ -3,6 +3,7 @@
 use crate::renderer::glyph_cache::GlyphAtlas;
 
 // Base sizes (at 1x scale)
+pub const BASE_TAB_BAR_HEIGHT: f32 = 32.0;
 pub const BASE_LINE_NUMBER_GUTTER_WIDTH: f32 = 50.0;
 pub const BASE_LINE_NUMBER_PADDING_RIGHT: f32 = 10.0;
 pub const BASE_TEXT_AREA_PADDING_LEFT: f32 = 10.0;
@@ -144,6 +145,7 @@ impl Rect {
 pub struct EditorLayout {
     pub viewport_width: f32,
     pub viewport_height: f32,
+    pub tab_bar: Rect,
     pub gutter: Rect,
     pub text_area: Rect,
     pub status_bar: Rect,
@@ -153,6 +155,7 @@ pub struct EditorLayout {
     pub char_width: f32,
     pub scale_factor: f32,
     // Scaled constants
+    pub tab_bar_height: f32,
     pub gutter_width: f32,
     pub line_number_padding_right: f32,
     pub text_area_padding_left: f32,
@@ -162,6 +165,7 @@ pub struct EditorLayout {
     pub status_bar_padding: f32,
     pub scrollbar_width: f32,
     // Show flags
+    pub show_tab_bar: bool,
     pub show_line_numbers: bool,
     pub show_status_bar: bool,
 }
@@ -175,10 +179,37 @@ impl EditorLayout {
         show_line_numbers: bool,
         show_status_bar: bool,
     ) -> Self {
+        // Don't show custom tab bar - use native macOS tabs instead
+        Self::with_tab_bar(
+            viewport_width,
+            viewport_height,
+            font_size,
+            scale_factor,
+            false, // show_tab_bar - disabled for native tabs
+            show_line_numbers,
+            show_status_bar,
+        )
+    }
+
+    /// Create layout with explicit tab bar visibility
+    pub fn with_tab_bar(
+        viewport_width: f32,
+        viewport_height: f32,
+        font_size: f32,
+        scale_factor: f32,
+        show_tab_bar: bool,
+        show_line_numbers: bool,
+        show_status_bar: bool,
+    ) -> Self {
         let line_height = (font_size * 1.4).round();
         let char_width = (font_size * 0.6).round();
 
         // Scale all layout constants
+        let tab_bar_height = if show_tab_bar {
+            (BASE_TAB_BAR_HEIGHT * scale_factor).round()
+        } else {
+            0.0
+        };
         let gutter_width = if show_line_numbers {
             (BASE_LINE_NUMBER_GUTTER_WIDTH * scale_factor).round()
         } else {
@@ -196,13 +227,19 @@ impl EditorLayout {
         let status_bar_padding = (BASE_STATUS_BAR_PADDING * scale_factor).round();
         let scrollbar_width = (BASE_SCROLLBAR_WIDTH * scale_factor).round();
 
-        let gutter = Rect::new(0.0, 0.0, gutter_width, viewport_height - status_bar_height);
+        // Content area is between tab bar and status bar
+        let content_top = tab_bar_height;
+        let content_height = viewport_height - tab_bar_height - status_bar_height;
+
+        let tab_bar = Rect::new(0.0, 0.0, viewport_width, tab_bar_height);
+
+        let gutter = Rect::new(0.0, content_top, gutter_width, content_height);
 
         let text_area = Rect::new(
             gutter_width,
-            0.0,
+            content_top,
             (viewport_width - gutter_width - scrollbar_width).max(0.0),
-            viewport_height - status_bar_height,
+            content_height,
         );
 
         let status_bar = Rect::new(
@@ -214,14 +251,15 @@ impl EditorLayout {
 
         let scrollbar_area = Rect::new(
             viewport_width - scrollbar_width,
-            0.0,
+            content_top,
             scrollbar_width,
-            viewport_height - status_bar_height,
+            content_height,
         );
 
         Self {
             viewport_width,
             viewport_height,
+            tab_bar,
             gutter,
             text_area,
             status_bar,
@@ -230,6 +268,7 @@ impl EditorLayout {
             line_height,
             char_width,
             scale_factor,
+            tab_bar_height,
             gutter_width,
             line_number_padding_right,
             text_area_padding_left,
@@ -238,6 +277,7 @@ impl EditorLayout {
             status_bar_height,
             status_bar_padding,
             scrollbar_width,
+            show_tab_bar,
             show_line_numbers,
             show_status_bar,
         }

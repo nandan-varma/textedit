@@ -209,6 +209,13 @@ impl State {
             modal_button_regions: Vec::new(),
             modal_input_regions: Vec::new(),
             modal_rect: None,
+            // Tab bar buffers
+            tab_bar_bg_vertex_buffer: None,
+            tab_bar_bg_index_buffer: None,
+            tab_bar_bg_index_count: 0,
+            tab_bar_text_vertex_buffer: None,
+            tab_bar_text_index_buffer: None,
+            tab_bar_text_index_count: 0,
         })
     }
     // Helper to get current UI colors from config
@@ -278,6 +285,13 @@ pub struct State {
     pub modal_button_regions: Vec<(crate::ui::modal::find_modal::FindButton, crate::renderer::layout::Rect)>,
     pub modal_input_regions: Vec<(crate::ui::modal::find_modal::FindField, crate::renderer::layout::Rect)>,
     pub modal_rect: Option<crate::renderer::layout::Rect>,
+    // Tab bar buffers
+    pub tab_bar_bg_vertex_buffer: Option<wgpu::Buffer>,
+    pub tab_bar_bg_index_buffer: Option<wgpu::Buffer>,
+    pub tab_bar_bg_index_count: u32,
+    pub tab_bar_text_vertex_buffer: Option<wgpu::Buffer>,
+    pub tab_bar_text_index_buffer: Option<wgpu::Buffer>,
+    pub tab_bar_text_index_count: u32,
 }
 
 impl State {

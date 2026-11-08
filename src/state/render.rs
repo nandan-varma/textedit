@@ -34,7 +34,40 @@ impl State {
                 occlusion_query_set: None,
             });
 
-            // 1. Render UI backgrounds (gutter, status bar)
+            // 1. Render tab bar background
+            if let Some(pipeline) = &self.color_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let (Some(vb), Some(ib)) = (
+                    &self.tab_bar_bg_vertex_buffer,
+                    &self.tab_bar_bg_index_buffer,
+                ) {
+                    if self.tab_bar_bg_index_count > 0 {
+                        render_pass.set_vertex_buffer(0, vb.slice(..));
+                        render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..self.tab_bar_bg_index_count, 0, 0..1);
+                    }
+                }
+            }
+
+            // 2. Render tab bar text
+            if let Some(pipeline) = &self.text_pipeline {
+                render_pass.set_pipeline(pipeline);
+                if let Some(bind_group) = &self.atlas_bind_group {
+                    render_pass.set_bind_group(0, bind_group, &[]);
+                }
+                if let (Some(vb), Some(ib)) = (
+                    &self.tab_bar_text_vertex_buffer,
+                    &self.tab_bar_text_index_buffer,
+                ) {
+                    if self.tab_bar_text_index_count > 0 {
+                        render_pass.set_vertex_buffer(0, vb.slice(..));
+                        render_pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(0..self.tab_bar_text_index_count, 0, 0..1);
+                    }
+                }
+            }
+
+            // 3. Render UI backgrounds (gutter, status bar)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let (Some(vb), Some(ib)) = (&self.ui_bg_vertex_buffer, &self.ui_bg_index_buffer)
@@ -45,7 +78,7 @@ impl State {
                 }
             }
 
-            // 2. Render text
+            // 4. Render text
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let Some(bind_group) = &self.atlas_bind_group {
@@ -58,7 +91,7 @@ impl State {
                 }
             }
 
-            // 3. Render line numbers
+            // 5. Render line numbers
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let Some(bind_group) = &self.atlas_bind_group {
@@ -74,7 +107,7 @@ impl State {
                 }
             }
 
-            // 4. Render status bar text
+            // 6. Render status bar text
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let Some(bind_group) = &self.atlas_bind_group {
@@ -90,7 +123,7 @@ impl State {
                 }
             }
 
-            // 5. Render cursor (on top)
+            // 7. Render cursor (on top)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
                 // Scrollbar
@@ -124,7 +157,7 @@ impl State {
                 }
             }
 
-            // 6. Render modal overlay (on top of everything)
+            // 8. Render modal overlay (on top of everything)
             if let Some(pipeline) = &self.color_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let (Some(vb), Some(ib)) =
@@ -138,7 +171,7 @@ impl State {
                 }
             }
 
-            // 7. Render modal text
+            // 9. Render modal text
             if let Some(pipeline) = &self.text_pipeline {
                 render_pass.set_pipeline(pipeline);
                 if let Some(bind_group) = &self.atlas_bind_group {

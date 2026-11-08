@@ -35,6 +35,7 @@ impl Selection {
     }
 }
 
+#[derive(Debug)]
 pub struct Cursor {
     position: usize,
     selection: Option<Selection>,
@@ -290,6 +291,25 @@ impl Cursor {
             }
         }
         self.selection = None;
+    }
+
+    pub fn extend_selection_to_line_start(&mut self, buffer: &Buffer) {
+        let (line, _) = buffer.char_to_line_col(self.position);
+        if let Some(idx) = buffer.line_col_to_char(line, 0) {
+            self.extend_selection(idx);
+        }
+        self.preferred_col = Some(0);
+    }
+
+    pub fn extend_selection_to_line_end(&mut self, buffer: &Buffer) {
+        let (line, _) = buffer.char_to_line_col(self.position);
+        if let Some(line_str) = buffer.line(line) {
+            let col = line_str.len();
+            if let Some(idx) = buffer.line_col_to_char(line, col) {
+                self.extend_selection(idx);
+                self.preferred_col = Some(col);
+            }
+        }
     }
 
     pub fn move_up(&mut self, buffer: &Buffer) {
